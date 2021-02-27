@@ -2,6 +2,7 @@ package AD2021.HTTPServer1;
 /*
 This HTTPServer4 is to realize POST method.
  */
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -87,10 +88,9 @@ public class HTTPServer4 {
                     if (bodyFlag) {
                         //To read the requestBody for several lines.
                         requestBody.append(line);
-                    }else if (line.trim().isBlank()) {
+                    } else if (line.trim().isBlank()) {
                         bodyFlag = true;
-                    }
-                    else {
+                    } else {
                         //you can use here to read headers.
 
                     }
@@ -176,13 +176,13 @@ public class HTTPServer4 {
         //call the method to format headers.
         formatHttpResponseHeader(response, "200 OK", fileLength, content);
 
-        if (method.equals("GET")){
+        if (method.equals("GET")) {
             //GET method will reply response body
             //HEAD method will not, so we don't add anything for HEAD method.
             response.write(fileData, 0, fileLength);
         }
 
-        if(method.equals("POST")){
+        if (method.equals("POST")) {
             response.write(fileData, 0, fileLength);
             //StringBuilder to format response body.
             StringBuilder bodyFormat = new StringBuilder();
@@ -279,7 +279,7 @@ public class HTTPServer4 {
         formatHttpResponseHeader(response, "404 file not found", fileLength, "text/html");
 
         byte[] fileData = readFileData(file, fileLength);
-        if(method.equals("GET") || method.equals("POST")) {
+        if (method.equals("GET") || method.equals("POST")) {
             response.write(fileData, 0, fileLength);
         }
         response.flush();

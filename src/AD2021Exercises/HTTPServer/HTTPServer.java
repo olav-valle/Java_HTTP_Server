@@ -1,10 +1,11 @@
 package AD2021Exercises.HTTPServer;
 
 
-
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Date;
 import java.util.Locale;
 import java.util.StringTokenizer;
@@ -22,15 +23,15 @@ public class HTTPServer {
 
     public static void main(String[] args) {
         try {
-            ServerSocket serverConnect = new ServerSocket(PORT);
+            ServerSocket listenSocket = new ServerSocket(PORT);
             System.out.println("Server started.... \n Port is open on " + PORT);
             //Listen until connection is required from user
-            while(true){
-                Socket connect = serverConnect.accept();
-                if(verbose){
+            while (true) {
+                Socket connectionSocket = listenSocket.accept();
+                if (verbose) {
                     System.out.println("Connection established on date: " + new Date() + "\n");
                 }
-                runServer(connect);
+                runServer(connectionSocket);
 
             }
 
@@ -39,40 +40,138 @@ public class HTTPServer {
         }
     }
 
-    private static void runServer(Socket connect){
+    private static void runServer(Socket connectionSocket) {
         //Manage client connection.
-        BufferedReader in;
-        PrintWriter out;
-        BufferedOutputStream dataOut;
-        String fileRequested;
+        BufferedReader inReader = null;
+        BufferedOutputStream outStream = null;
 
         try {
             //Read characters from the client via input stream.
-            in = new BufferedReader(new InputStreamReader(connect.getInputStream()));
+            inReader = new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
             //Get character output stream to client (for headers).
-            out = new PrintWriter(connect.getOutputStream());
+            //out = new PrintWriter(connectionSocket.getOutputStream());
             //Get binary output stream to client (for request resource)
-            dataOut = new BufferedOutputStream(connect.getOutputStream());
+            outStream = new BufferedOutputStream(connectionSocket.getOutputStream());
 
             //Parse information from HTTP request, first line.
-            String input = in.readLine();
-            String[] parsed = input.split(" ");
-            StringTokenizer parse = new StringTokenizer(input);
-            //Get requested method.
-            String func = parsed[0].toUpperCase();
-            String method = parse.nextToken().toUpperCase();
-            //Get concrete requested resource.
-            String file = parsed[1].toLowerCase();
-            fileRequested = parse.nextToken().toLowerCase();
+            String request = inReader.readLine();
+            //HTTP request split at "spaces", stored as String[]
 
-            //Check the method. Here we only support GET and HEAD.
-            if ((!method.equals("GET")) && (!method.equals("HEAD"))){
-                System.out.println("501, method not implemented. " + method +"\n");
-            }
+            // Format and send response
+            formatResponse(request, outStream);
+
 
 
         } catch (IOException e) {
             System.out.println("IO EXCEPTION: " + e.getMessage());
+        } finally {
+            closeConnection(connectionSocket, inReader, outStream);
         }
     }
+
+    /**
+     * Closes given Socket, BufferedReader and BufferedOutputStream objects.
+     *
+     * @param connection
+     * @param reader
+     * @param outStream
+     */
+    private static void closeConnection(Socket connection, BufferedReader reader, BufferedOutputStream outStream) {
+        try {
+            reader.close();
+            outStream.close();
+            connection.close();
+        } catch (IOException ioe) {
+            System.err.println("Exception while closing connection socket or related buffers: " + ioe.getMessage());
+        }
+    }
+
+    //todo: formatResponse()
+
+    /**
+     * Formats an HTTP response to the provided HTTP Request.
+     *
+     * @param HTTPRequest
+     * @param dataOut
+     */
+    private static void formatResponse(String HTTPRequest, BufferedOutputStream dataOut) {
+        try {
+            //HTTP Requests have format: "METHOD /pathTo/requestedFile.type HTTP/VERSION"
+            String[] requestArray = HTTPRequest.split(" ");
+            // HTTP request method
+            String method = requestArray[0].toUpperCase();
+
+            switch(method){
+                case "HEAD":
+                    handleHEADRequest();
+                    break;
+                case "GET":
+                    handleGETRequest();
+                    break;
+                case "POST":
+                    handlePOSTRequest();
+                    break;
+                default:
+                    handleNYIRequest();
+            }
+
+            // find mimeType of requested file
+            String mimeType = Files.probeContentType(Path.of(requestArray[1]));
+            // if mimeType == null, then the file was not found
+            // or type not defined in RFC 2045.
+            // Either way, we have a problem regarding Content-Type in the response header.
+            if (mimeType != null) {
+//                formatResponseHeader();
+            }
+        } catch (IOException ioe) {
+            System.err.println(ioe.getMessage());
+            //todo: less lazy plz
+        }
+
+    }
+
+    /**
+     * Handler for request methods not yet implemented. Default in request handler switch case.
+     */
+    private static void handleNYIRequest() {
+    }
+
+    //todo: formatResponseHeader()
+
+    /**
+     * Formats the header of an HTTP response.
+     * @param outStream
+     * @param statusCode
+     * @param contentLength
+     * @param mimeType
+     */
+    private static void formatResponseHeader(BufferedOutputStream outStream, int statusCode, int contentLength, String mimeType) {
+
+    }
+
+    //todo: formatResponseBody()
+
+    /**
+     * Formats the body of an HTTP response. Usually, this involves appending the contents of a file.
+     */
+    private static void formatResponseBody() {
+
+    }
+
+
+    //todo: handleHEADRequest
+    public static void handleHEADRequest() {
+
+    }
+
+    //todo: handleGETRequest
+    public static void handleGETRequest(){
+
+    }
+
+    //todo: handlePOSTRequest
+    private static void handlePOSTRequest() {
+
+    }
+
 }

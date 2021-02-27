@@ -14,7 +14,7 @@ public class TestClient {
     public static void main(String[] args) throws IOException {
 
         for (int i = 1; i < 10; i++) {
-            System.out.println("Running case " + i);
+            System.out.println("\n------\nRunning case " + i + "\n------");
             try {
                 Socket s = new Socket(InetAddress.getByName("localhost"), 8080);
                 PrintWriter pw = new PrintWriter(s.getOutputStream());
@@ -24,38 +24,47 @@ public class TestClient {
                 switch (i) {
                     //To test 501 not implemented
                     case 1:
+                        System.out.println("1. Method not supported.");
                         sendRequest(pw, "abc", false, false);
                         break;
                     //To test index file
                     case 2:
+                        System.out.println("2. Get method with default response.");
                         sendRequest(pw, "get", false, false);
                         break;
                     //To test 404 file not found
                     case 3:
+                        System.out.println("3. Get method with file not found.");
                         sendRequest(pw, "get", true, false);
                         break;
                     //To test head method with index file
                     case 4:
+                        System.out.println("4. Head method with index file");
                         sendRequest(pw, "head", false, false);
                         break;
                     //To test head method with file not found
                     case 5:
+                        System.out.println("5. Head method with file not found.");
                         sendRequest(pw, "head", true, false);
                         break;
                     //To test post method with index file
                     case 6:
+                        System.out.println("6. Post method.");
                         sendRequest(pw, "post", false, true);
                         break;
                     //To test user validation
                     case 7:
+                        System.out.println("7. User validation.");
                         sendRequestUserValidation(pw, "post", true, true);
                         break;
                     //To test poker distribution
                     case 8:
+                        System.out.println("8. Poker distribution.");
                         sendRequestPokerDistribution(pw, "post", true, true);
                         break;
                     // To test Text Upload function (if you want more challenge, you can try to upload the image instead).
                     case 9:
+                        System.out.println("9. User image/file upload.");
                         sendRequestUserTextUpload(s, pw, "post", true, true);
                         break;
                     default:

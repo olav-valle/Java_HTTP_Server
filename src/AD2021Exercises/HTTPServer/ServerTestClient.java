@@ -1,12 +1,15 @@
-package AD2021.HTTPServer1;
+package AD2021Exercises.HTTPServer;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-public class TestClient {
+public class ServerTestClient {
     static final int EXERCISE_NUM = 1; //exercise questions. Changed to for-loop in main.
     static final String FILE_PATH = "/home/mort/git/appdev_http/src/AD2021/HTTPServer1/testfile.txt";
     static final String ORG_WEB_TEXT = "C:\\ProPro\\Classes\\2021 Application Development\\Exercises\\WebText.txt";

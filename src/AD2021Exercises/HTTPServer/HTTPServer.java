@@ -4,13 +4,16 @@ package AD2021Exercises.HTTPServer;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Files;
 import java.util.Date;
+import java.util.Map;
 import java.util.logging.*;
+import java.util.stream.Collectors;
 
 public class HTTPServer {
 
 
-    static final File WEB_ROOT = new File("lib/");
+    static final File WEB_ROOT = new File("/home/mort/git/appdev_http/lib");
     static final String DEFAULT_FILE = "index.html";
     static final String FILE_NOT_FOUND = "404.html";
     static final String METHOD_NOT_SUPPORTED = "not_supported.html";
@@ -70,10 +73,6 @@ public class HTTPServer {
         try {
             //Read characters from the client via input stream.
             inReader = new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
-            //Get character output stream to client (for headers).
-            //out = new PrintWriter(connectionSocket.getOutputStream());
-            //Get binary output stream to client (for request resource)
-            outStream = new BufferedOutputStream(connectionSocket.getOutputStream());
 
             //Parse HTTP request.
             HTTPRequest request = parseRequest(inReader);
@@ -81,6 +80,11 @@ public class HTTPServer {
             // Format and send response
             HTTPResponse response = formatResponse(request);
 
+            // buffer the socket output stream
+            outStream = new BufferedOutputStream(connectionSocket.getOutputStream());
+
+            // Send message
+            writeOutAndFlush(outStream, response);
 
         } catch (IOException e) {
             System.out.println("IO EXCEPTION: " + e.getMessage());
@@ -90,6 +94,32 @@ public class HTTPServer {
         return false;
     }
 
+    private static void writeOutAndFlush(BufferedOutputStream outStream, HTTPResponse response) {
+        // PrintWriter is buffered by outStream
+        PrintWriter writeOut = new PrintWriter(outStream);
+
+        // Format and append the response status-line to message
+        // HTTP-Version SP Status-Code SP Reason-Phrase CRLF
+        writeOut.println(
+                response.getVersion()
+                        + " " +
+                        response.getStatusCode()
+                        + " " +
+                        response.getReasonPhrase());
+
+        // Append head fields to response message
+        response.getHeadFields()
+                .entrySet()
+                .stream()
+                .map(entry -> entry.getKey() + ": " + entry.getValue())
+                .forEach(writeOut::println);
+
+        // Append message body to response
+        writeOut.println(response.getBody());
+
+        // Flush writer and output stream.
+        writeOut.flush();
+    }
     /**
      * Parses the content of a BufferedReader, creating an HTTPRequest object from its contents.
      * This method naively parses any BufferedReader object as if its contents had the
@@ -131,16 +161,16 @@ public class HTTPServer {
             // Add request header fields to Builder
             if (inReader.ready()) { // Check for presence of first header line
                 String headLine = inReader.readLine();
-            while (!headLine.trim().isBlank()) { // Head ends with blank newline, i.e. "\r\n".
-                String[] keyValue = headLine.split(" "); // split into "FieldName:" "FieldValue"
-                reqBuilder.headField(keyValue[0], keyValue[1]); // "FieldName:" is key, "FieldValue" is value
-                if (inReader.ready()) { // next line from buffer, if present.
-                    headLine = inReader.readLine();
-                } else { // or a blank line if not, just to ensure that the loop ends.
-                    headLine = "";
-                }
-            }// done with header fields
-            logger.info("Done with header fields");
+                while (!headLine.trim().isBlank()) { // Head ends with blank newline, i.e. "\r\n".
+                    String[] keyValue = headLine.split(" "); // split into "FieldName:" "FieldValue"
+                    reqBuilder.headField(keyValue[0], keyValue[1]); // "FieldName:" is key, "FieldValue" is value
+                    if (inReader.ready()) { // next line from buffer, if present.
+                        headLine = inReader.readLine();
+                    } else { // or a blank line if not, just to ensure that the loop ends.
+                        headLine = "";
+                    }
+                }// done with header fields
+                logger.info("Done with header fields");
             }
 
             // Adding request body to Builder
@@ -185,12 +215,13 @@ public class HTTPServer {
      */
     private static void closeConnection(Socket connection, BufferedReader reader, BufferedOutputStream outStream) {
         try {
-            reader.close();
-            outStream.close();
-            connection.close();
-            fileLogger.close();
+            if (reader != null) reader.close();
+            if (outStream != null) outStream.close();
+            if (connection != null) connection.close();
         } catch (IOException ioe) {
-            System.err.println("Exception while closing connection socket or related buffers: " + ioe.getMessage());
+            logger.info(ioe.getMessage());
+        } finally {
+            fileLogger.close(); // Write tail to logger file
         }
     }
 
@@ -200,40 +231,66 @@ public class HTTPServer {
      * Formats an HTTP response to the provided HTTP Request.
      *
      * @param request HTTPRequest object to create a response for.
+     * @return HTTPResponse object containing response message,
+     * or null if HTTPResponse object creation failed for any reason.
      */
     private static HTTPResponse formatResponse(HTTPRequest request) {
-        switch(request.getMethod()) {
+        HTTPResponse response = null;
+        switch (request.getMethod()) {
             case "GET":
+                logger.info("GET request");
+                response = handleGETRequest(request);
                 break;
             case "HEAD":
+                logger.info("HEAD request");
+                response = handleHEADRequest(request);
                 break;
             case "POST":
+                logger.info("POST request");
+                response = handlePOSTRequest(request);
                 break;
             default:
-                handleNYIRequest();
+                logger.info("Not implemented");
+                response = handleNYIRequest(request);
         }
 
-        return null;
+        return response;
     }
 
     /**
      * Handler for request methods not yet implemented. Default in request handler switch case.
+     *
+     * @param request The HTTPRequest representing the request message.
      */
-    private static void handleNYIRequest() {
-        
+    private static HTTPResponse handleNYIRequest(HTTPRequest request) {
+        logger.info("Building response");
+        HTTPResponse.Builder resBuilder = new HTTPResponse.Builder(request.getVersion(), "501", "Not Implemented");
+
+        File file = new File(WEB_ROOT, METHOD_NOT_SUPPORTED);
+        try (BufferedReader r = new BufferedReader(new FileReader(new File(WEB_ROOT, METHOD_NOT_SUPPORTED)))) {
+            logger.info("Adding response body");
+
+            // Adding element headers
+            String filetype = Files.probeContentType(file.toPath());
+            logger.info("Content-type from probe: " + filetype);
+            resBuilder.headField("Content-type:", filetype);
+            resBuilder.headField("Content-length:", String.valueOf(file.length()));
+            // adding response body from file
+            String body = r.lines().collect(Collectors.joining("\r\n"));
+            resBuilder.body(body.toString());
+        } catch (IOException ioe) {
+            logger.info(ioe.getMessage());
+        }
+
+        return resBuilder.build();
     }
 
     //todo: formatResponseHeader()
 
     /**
      * Formats the header of an HTTP response.
-     *
-     * @param outStream
-     * @param statusCode
-     * @param contentLength
-     * @param mimeType
      */
-    private static void formatResponseHeader(BufferedOutputStream outStream, int statusCode, int contentLength, String mimeType) {
+    private static void formatResponseHeader() {
 
     }
 
@@ -248,18 +305,21 @@ public class HTTPServer {
 
 
     //todo: handleHEADRequest
-    public static void handleHEADRequest() {
+    public static HTTPResponse handleHEADRequest(HTTPRequest request) {
 
+        return null;
     }
 
     //todo: handleGETRequest
-    public static void handleGETRequest() {
+    public static HTTPResponse handleGETRequest(HTTPRequest request) {
 
+        return null;
     }
 
     //todo: handlePOSTRequest
-    private static void handlePOSTRequest() {
+    private static HTTPResponse handlePOSTRequest(HTTPRequest request) {
 
+        return null;
     }
 
     private static void log(String logMessage) {

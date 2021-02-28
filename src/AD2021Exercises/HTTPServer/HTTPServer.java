@@ -5,6 +5,7 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Date;
 import java.util.Map;
 import java.util.logging.*;
@@ -120,6 +121,7 @@ public class HTTPServer {
         // Flush writer and output stream.
         writeOut.flush();
     }
+
     /**
      * Parses the content of a BufferedReader, creating an HTTPRequest object from its contents.
      * This method naively parses any BufferedReader object as if its contents had the
@@ -225,8 +227,6 @@ public class HTTPServer {
         }
     }
 
-    //todo: formatResponse()
-
     /**
      * Formats an HTTP response to the provided HTTP Request.
      *
@@ -246,15 +246,6 @@ public class HTTPServer {
                 response = handleHEADRequest(request);
                 break;
             case "POST":
-                logger.info("POST request");
-                response = handlePOSTRequest(request);
-                break;
-            default:
-                logger.info("Not implemented");
-                response = handleNYIRequest(request);
-        }
-
-        return response;
     }
 
     /**
@@ -270,12 +261,22 @@ public class HTTPServer {
         try (BufferedReader r = new BufferedReader(new FileReader(new File(WEB_ROOT, METHOD_NOT_SUPPORTED)))) {
             logger.info("Adding response body");
 
+            logger.info("POST request");
+            response = handlePOSTRequest(request);
+            break;
+            default:
+                logger.info("Not implemented");
+                response = handleNYIRequest(request);
+        }
+
+        return response;
             // Adding element headers
             String filetype = Files.probeContentType(file.toPath());
             logger.info("Content-type from probe: " + filetype);
             resBuilder.headField("Content-type:", filetype);
             resBuilder.headField("Content-length:", String.valueOf(file.length()));
             // adding response body from file
+            //todo: move this to bodyFormat method
             String body = r.lines().collect(Collectors.joining("\r\n"));
             resBuilder.body(body.toString());
         } catch (IOException ioe) {
@@ -297,22 +298,78 @@ public class HTTPServer {
     //todo: formatResponseBody()
 
     /**
-     * Formats the body of an HTTP response. Usually, this involves appending the contents of a file.
+     * Formats the body of an HTTP response.
+     * Usually, this involves appending the contents of a file and related headers.
      */
-    private static void formatResponseBody() {
+    private static void formatResponseBody(HTTPResponse response, ) {
+        File file = new File(WEB_ROOT, METHOD_NOT_SUPPORTED);
+        try (BufferedReader r = new BufferedReader(new FileReader(new File(WEB_ROOT, METHOD_NOT_SUPPORTED)))) {
+            logger.info("Adding response body");
+
+            // Adding element headers
+            String filetype = Files.probeContentType(file.toPath());
+            logger.info("Content-type from probe: " + filetype);
+            resBuilder.headField("Content-type:", filetype);
+            resBuilder.headField("Content-length:", String.valueOf(file.length()));
+            // adding response body from file
+            //todo: move this to bodyFormat method
+            String body = r.lines().collect(Collectors.joining("\r\n"));
+            resBuilder.body(body.toString());
+        } catch (IOException ioe) {
+            logger.info(ioe.getMessage());
+        }
 
     }
 
 
+
+
     //todo: handleHEADRequest
-    public static HTTPResponse handleHEADRequest(HTTPRequest request) {
+    private static HTTPResponse handleHEADRequest(HTTPRequest request) {
+        //todo: ?? enum <statusCode, reasonPhrase> pairs?
+        String statusCode = "";
+        String reasonPhrase = "";
+
+        if (Files.exists(Path.of(request.getUrl()))){
+            // 200 OK
+            statusCode = String.valueOf(HttpStatusCode.OK.getValue());
+            reasonPhrase = HttpStatusCode.OK.getDescription();
+        } else{
+            // 404 File Not Found
+            statusCode = String.valueOf(HttpStatusCode.NOT_FOUND.getValue());
+            reasonPhrase = HttpStatusCode.NOT_FOUND.getDescription();
+        }
+
+        HTTPResponse.Builder resBuilder = new HTTPResponse
+                .Builder(request.getVersion(), // HTTP-version same as request
+                statusCode,
+                reasonPhrase);
 
         return null;
     }
 
     //todo: handleGETRequest
-    public static HTTPResponse handleGETRequest(HTTPRequest request) {
+    private static HTTPResponse handleGETRequest(HTTPRequest request) {
+        HTTPResponse response = handleHEADRequest(request);
+        if (!response.getStatusCode().equals("404")){
+            File file = new File(WEB_ROOT, request.getUrl());
+            try (BufferedReader r = new BufferedReader(new FileReader(file))) {
+                logger.info("Adding response body");
 
+                // Adding element headers
+                String filetype = Files.probeContentType(file.toPath());
+                logger.info("Content-type from probe: " + filetype);
+                resBuilder.headField("Content-type:", filetype);
+                resBuilder.headField("Content-length:", String.valueOf(file.length()));
+                // adding response body from file
+                //todo: move this to bodyFormat method
+                String body = r.lines().collect(Collectors.joining("\r\n"));
+                resBuilder.body(body.toString());
+            } catch (IOException ioe) {
+                logger.info(ioe.getMessage());
+            }
+
+        }
         return null;
     }
 

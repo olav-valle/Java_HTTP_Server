@@ -16,7 +16,7 @@ public class ServerTestClient {
 
     public static void main(String[] args) throws IOException {
 
-        for (int i = 1; i < 2; i++) {
+        for (int i = 1; i < 10; i++) {
             System.out.println("\n------\nRunning case " + i + "\n------");
             try {
                 Socket s = new Socket(InetAddress.getByName("localhost"), 8080);

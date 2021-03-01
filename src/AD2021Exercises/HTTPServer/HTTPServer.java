@@ -6,7 +6,11 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
+import java.util.Locale;
 import java.util.logging.*;
 import java.util.stream.Collectors;
 
@@ -21,7 +25,15 @@ public class HTTPServer {
     // Port Setting
     static final int PORT = 8080;
     //verbose mode to console output.
+
+    // DEBUGGING
+    // todo: remove
+    // ----------------------------------------------
     static final boolean verbose = true;
+    // Set this field to dump request message to terminal, instead of handling it
+    private static final boolean DUMP_REQUEST_TO_TERMINAL = false;
+    // ----------------------------------------------
+
 
     // Logging
     private static Logger logger;
@@ -31,6 +43,7 @@ public class HTTPServer {
     public static void main(String[] args) {
         logger = Logger.getLogger("ServerLog");
         consoleLogger = new ConsoleHandler();
+        consoleLogger.setFormatter(new SimpleFormatter());
         try {
             fileLogger = new FileHandler(
                     "%h/git/appdev_http/log.txt", true);
@@ -74,20 +87,26 @@ public class HTTPServer {
             //Read characters from the client via input stream.
             inReader = new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
 
-            //Parse HTTP request.
-            HTTPRequest request = parseRequest(inReader);
-
-            // Format and send response
-            HTTPResponse response = formatResponse(request);
-
-            // buffer the socket output stream
-            outStream = new BufferedOutputStream(connectionSocket.getOutputStream());
-
-            // Send message
-            if (response != null) {
-                writeOutAndFlush(outStream, response);
+            if (DUMP_REQUEST_TO_TERMINAL) {
+                dumpRequest(inReader);
             } else {
-                outStream.flush();
+                //Parse HTTP request.
+
+                HTTPRequest request = parseRequest(inReader);
+
+                // Format and send response
+                HTTPResponse response = formatResponse(request);
+
+                // buffer the socket output stream
+                outStream = new BufferedOutputStream(connectionSocket.getOutputStream());
+
+                // Send message
+                if (response != null) {
+                    writeOutAndFlush(outStream, response);
+                } else {
+                    outStream.flush();
+                }
+                closeConnection(connectionSocket, inReader, outStream);
             }
 
         } catch (IOException e) {
@@ -98,34 +117,8 @@ public class HTTPServer {
         return false;
     }
 
-    private static void writeOutAndFlush(BufferedOutputStream outStream, HTTPResponse response) {
-        // PrintWriter is buffered by outStream
-        PrintWriter writeOut = new PrintWriter(outStream);
-
-        // Format and append the response status-line to message
-        // HTTP-Version SP Status-Code SP Reason-Phrase CRLF
-        writeOut.println(
-                response.getVersion()
-                        + " " +
-                        response.getStatusCode()
-                        + " " +
-                        response.getReasonPhrase());
-
-        // Append head fields to response message
-        response.getHeadFields()
-                .entrySet()
-                .stream()
-                .map(entry -> entry.getKey() + ": " + entry.getValue())
-                .forEach(writeOut::println);
-        writeOut.print("\r\n");
-
-        // Append message body, if any, to response
-        if (!response.getBody().equals("")) {
-            writeOut.println(response.getBody());
-        }
-
-        // Flush writer and output stream.
-        writeOut.flush();
+    private static void dumpRequest(BufferedReader in) {
+        in.lines().forEach(System.out::println);
     }
 
     /**
@@ -182,19 +175,23 @@ public class HTTPServer {
             }
 
             // Adding request body to Builder
-            StringBuilder body = new StringBuilder();
+            StringBuilder bodyBuilder = new StringBuilder();
+            //inReader.lines().forEach(body::append);
+//            String whatTheFuck = inReader.readLine();
+//            logger.info("What the fuck is this? " + whatTheFuck);
             logger.info("Building request body string.");
             while (inReader.ready()) {
                 String bodyLine = inReader.readLine();
-                body.append(bodyLine).append("\r\n"); // Append current line
-                logger.info("Line appended to body: " + bodyLine);
+                bodyBuilder.append(bodyLine).append("\r\n"); // Append current line
+                //logger.info("Line appended to body: " + bodyLine);
             }// Done constructing body string
 
+            String body = bodyBuilder.toString();
             // Add body string to Builder
-            if (!body.toString().isBlank()) {
+            if (!body.isBlank()) {
                 // If body is not blank
                 logger.info("Body string added to request object");
-                reqBuilder.body(body.toString());
+                reqBuilder.body(body);
             } else {
                 // Don't add body if blank
                 logger.info("Body string is blank, nothing to add.");
@@ -209,6 +206,37 @@ public class HTTPServer {
         }
 
         return request;
+    }
+
+    private static void writeOutAndFlush(BufferedOutputStream outStream, HTTPResponse response) {
+        // PrintWriter is buffered by outStream
+        PrintWriter writeOut = new PrintWriter(outStream);
+
+        // Format and append the response status-line to message
+        // HTTP-Version SP Status-Code SP Reason-Phrase CRLF
+        writeOut.println(
+                response.getVersion()
+                        + " " +
+                        response.getStatusCode()
+                        + " " +
+                        response.getReasonPhrase());
+
+        // Append head fields to response message
+        response.getHeadFields()
+                .entrySet()
+                .stream()
+                .map(entry -> entry.getKey() + ": " + entry.getValue())
+                .forEach(writeOut::println);
+        writeOut.print("\r\n");
+
+        // Append message body, if any, to response
+        if (!response.getBody().equals("")) {
+
+            writeOut.println(response.getBody());
+        }
+
+        // Flush writer and output stream.
+        writeOut.flush();
     }
 
     /**
@@ -269,6 +297,7 @@ public class HTTPServer {
      *
      * @param request The HTTPRequest representing the request message.
      */
+    // TODO: 01/03/2021 Refactor this into createResponseBuilder
     private static HTTPResponse.Builder handleNYIRequest(HTTPRequest request) {
         logger.info("Building response");
         HTTPResponse.Builder resBuilder = new HTTPResponse.Builder(request.getVersion(), "501", "Not Implemented");
@@ -281,47 +310,64 @@ public class HTTPServer {
         return resBuilder;
     }
 
+    /**
+     * Formats a response to a HEAD request message.
+     *
+     * @param request The HEAD request message to respond to.
+     * @return A Builder object for the response message.
+     */
     private static HTTPResponse.Builder handleHEADRequest(HTTPRequest request) {
-        //Minimal response with only status-line
-        HTTPResponse.Builder response = createResponseBuilder(request);
-
-        File file;
-        if (request.getUrl().equals("/")) {
-            file = new File(WEB_ROOT, DEFAULT_FILE);
-        } else if (Files.exists(Path.of(request.getUrl()))) {
-            file = new File(WEB_ROOT, request.getUrl());
-        } else {
-            file = new File(WEB_ROOT, FILE_NOT_FOUND);
-        }
-
-        formatGeneralHeaders(response);
-        formatContentHeaders(response, file);
-
-        return response;
+        return formatMessage(request);
     }
-    // TODO: 01/03/2021 refactor HEAD and GET. They're basically the same function
 
+    /**
+     * Formats a response to a GET request message.
+     *
+     * @param request The GET request message to respond to.
+     * @return A Builder object for the response message.
+     */
     private static HTTPResponse.Builder handleGETRequest(HTTPRequest request) {
+        return formatMessage(request);
+    }
+
+    /**
+     * Creates an HTTPResponse builder object,
+     * which has the appropriate status-line, header fields and body content for
+     * the given HTTPRequest.
+     *
+     * @param request HTTPRequest object to create response for
+     * @return HTTPResponse message builder object
+     */
+    private static HTTPResponse.Builder formatMessage(HTTPRequest request) {
         //Minimal response with only status-line
         HTTPResponse.Builder response = createResponseBuilder(request);
 
         File file;
         if (request.getUrl().equals("/")) {
-            file = new File(WEB_ROOT, DEFAULT_FILE);
+            file = new File(WEB_ROOT, DEFAULT_FILE);        // Requested file was root, we return server specific default.
         } else if (Files.exists(Path.of(request.getUrl()))) {
-            file = new File(WEB_ROOT, request.getUrl());
+            file = new File(WEB_ROOT, request.getUrl());    // Requested file exists
         } else {
-            file = new File(WEB_ROOT, FILE_NOT_FOUND);
+            file = new File(WEB_ROOT, FILE_NOT_FOUND);      // Requested file does not exists
         }
 
+        // General headers
         formatGeneralHeaders(response);
+        // Content headers
         formatContentHeaders(response, file);
-        formatResponseBody(response, file);
+        // Response body, if request was GET
+        if (request.getMethod().equalsIgnoreCase("GET")) {
+            formatResponseBody(response, file);
+        }
 
         return response;
     }
 
-    //todo: handlePOSTRequest
+
+    //TODO: 01/03/2021 handlePOSTRequest
+    // 1. Ensure that HTTPRequest handles body correctly.
+    // 2. Implement methods used by POST tests: Poker, TextUpload and UserAuthenticate.
+    // 3. Expand formatting and header methods to handle eventual output from external methods above.
     private static HTTPResponse.Builder handlePOSTRequest(HTTPRequest request) {
 
         return null;
@@ -365,8 +411,10 @@ public class HTTPServer {
      */
     private static void formatGeneralHeaders(HTTPResponse.Builder response) {
         //todo: add more general headers?
+
         response.headField("Server", "Basic HTTP Server 0.1");
-        response.headField("Date", new Date().toString());
+
+        response.headField("Date", toServerHTTPTime(new Date().toInstant()));
 
     }
 
@@ -379,9 +427,12 @@ public class HTTPServer {
     private static void formatContentHeaders(HTTPResponse.Builder response, File file) {
         try (BufferedReader r = new BufferedReader(new FileReader(file))) {
             String filetype = Files.probeContentType(file.toPath());
+            String modified = toServerHTTPTime(Files.getLastModifiedTime(file.toPath()).toInstant());
+            ;
             logger.info("Content-type from probe: " + filetype);
-            response.headField("Content-type", filetype);
             response.headField("Content-length", String.valueOf(file.length()));
+            response.headField("Content-type", filetype);
+            response.headField("Last-Modified", modified);
         } catch (IOException ioe) {
             logger.info(ioe.getMessage());
         }
@@ -397,13 +448,26 @@ public class HTTPServer {
         try (BufferedReader r = new BufferedReader(new FileReader(file))) {
             logger.info("Adding response body");
             // adding response body from file
-            String body = r.lines().collect(Collectors.joining("\r\n"));
-            response.body(body);
+            String s = Files.readString(file.toPath());
+            response.body(s);
         } catch (IOException ioe) {
             logger.info(ioe.getMessage());
         }
     }
 
+    /**
+     * Formats the given Instant according to RFC 1123.
+     * Example: Sun, 06 Nov 1994 08:49:37 GMT.
+     * @param time The Instant to format.
+     * @return The Instant, formatted according to RFC 1123.
+     */
+    private static String toServerHTTPTime(Instant time) {
+        return DateTimeFormatter // RFC 1123 compliant HTTP time
+                .ofPattern("EEE, dd MMM yyyy HH:mm:ss z", Locale.ENGLISH)
+                .withZone(ZoneId.of("GMT"))
+                .format(time);
+
+    }
 
 
 }

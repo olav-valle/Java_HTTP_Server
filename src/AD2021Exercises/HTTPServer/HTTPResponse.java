@@ -1,6 +1,7 @@
 package AD2021Exercises.HTTPServer;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 
 /**
  * A simple implementation of an object representing an HTTP response message, following RFC 2616.
@@ -14,7 +15,7 @@ public class HTTPResponse {
     private final String version;
     private final String statusCode;
     private final String reasonPhrase;
-    private final HashMap<String, String> headFields;
+    private final LinkedHashMap<String, String> headFields;
     private final String body;
 
     /**
@@ -43,11 +44,14 @@ public class HTTPResponse {
 
     /**
      * Returns a map holding the header fields for this response message.
+     * Elements are stored in the order they were added to the original map.
      * The uses header-name as keys, and header-value as value.
      * @return map of message header fields.
      */
-    public HashMap<String, String> getHeadFields() {
-        return headFields;
+    public LinkedHashMap<String, String> getHeadFields() {
+        @SuppressWarnings("unchecked")
+        LinkedHashMap<String, String> headCopy = (LinkedHashMap<String, String>) headFields.clone();
+        return headCopy;
     }
 
     /**
@@ -76,7 +80,7 @@ public class HTTPResponse {
         private final String statusCode;
         private final String reasonPhrase;
         // Optional fields
-        private final HashMap<String, String> headFields = new HashMap<>();
+        private final LinkedHashMap<String, String> headFields = new LinkedHashMap<>();
 
         private String body = "";
 

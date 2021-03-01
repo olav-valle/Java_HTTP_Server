@@ -1,6 +1,7 @@
 package AD2021Exercises.HTTPServer;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 
 /**
  * A simple implementation of an object representing an HTTP request message, following RFC 2616.
@@ -13,7 +14,7 @@ public class HTTPRequest {
     private final String method;
     private final String url;
     private final String version;
-    private final HashMap<String, String> headFields;
+    private final LinkedHashMap<String, String> headFields;
     private final String body;
 
     /**
@@ -43,11 +44,12 @@ public class HTTPRequest {
 
     /**
      * Returns a map of the header fields and their values in this request.
+     * Elements are stored in the order they were added to the original map.
      * @return map of header fields and values.
      */
-    public HashMap<String, String> getHeadFields() {
+    public LinkedHashMap<String, String> getHeadFields() {
         @SuppressWarnings("unchecked")
-        HashMap<String, String> headCopy = (HashMap<String, String>) headFields.clone();
+        LinkedHashMap<String, String> headCopy = (LinkedHashMap<String, String>) headFields.clone();
         return headCopy;
     }
 
@@ -97,7 +99,7 @@ public class HTTPRequest {
         private final String version;
 
         // Optional fields for HTTP request
-        private final HashMap<String, String> headFields = new HashMap<>();
+        private final LinkedHashMap<String, String> headFields = new LinkedHashMap<>();
         private String body = "";
 
         /**

@@ -175,6 +175,9 @@ public class HTTPServer {
             }
 
             // Adding request body to Builder
+
+            Thread.sleep(1);
+
             StringBuilder bodyBuilder = new StringBuilder();
             //inReader.lines().forEach(body::append);
 //            String whatTheFuck = inReader.readLine();
@@ -201,7 +204,7 @@ public class HTTPServer {
             request = reqBuilder.build();
             logger.info("Printing request.toString:\n" + request.toString());
 
-        } catch (IOException ioe) {
+        } catch (IOException | InterruptedException ioe) {
             logger.info(ioe.toString());
         }
 
@@ -458,6 +461,7 @@ public class HTTPServer {
     /**
      * Formats the given Instant according to RFC 1123.
      * Example: Sun, 06 Nov 1994 08:49:37 GMT.
+     *
      * @param time The Instant to format.
      * @return The Instant, formatted according to RFC 1123.
      */

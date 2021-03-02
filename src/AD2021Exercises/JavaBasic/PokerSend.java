@@ -79,6 +79,11 @@ public class PokerSend {
 
     }
 
+    public static String getPlayerhand(String player) {
+
+        return null;
+    }
+
     public static String printPoker(List<Integer> poker_nums, Map<Integer, String> poker_cards) {
         //1. sort number
         Collections.sort(poker_nums);

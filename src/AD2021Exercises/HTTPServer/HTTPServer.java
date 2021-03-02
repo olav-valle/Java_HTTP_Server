@@ -48,6 +48,7 @@ public class HTTPServer {
             fileLogger = new FileHandler(
                     "%h/git/appdev_http/log.txt", true);
             fileLogger.setFormatter(consoleLogger.getFormatter());
+
             logger.addHandler(fileLogger);
         } catch (IOException ioe) {
             logger.info("Failed to create log file 'log.txt'. IOException: \n" + ioe.getMessage());
@@ -103,10 +104,11 @@ public class HTTPServer {
                 // Send message
                 if (response != null) {
                     writeOutAndFlush(outStream, response);
+                    logger.info("Response Returned.");
                 } else {
                     outStream.flush();
                 }
-                closeConnection(connectionSocket, inReader, outStream);
+                //closeConnection(connectionSocket, inReader, outStream);
             }
 
         } catch (IOException e) {
@@ -174,26 +176,29 @@ public class HTTPServer {
                 logger.info("Done with header fields");
             }
 
-            // TODO: 01/03/2021 Find some better solution to the below.
-            //  Some way to wait for line, only if we are certain there will be one.
+            // TODO: 02/03/2021 This "solution" to the body-read bug,
+            //  is to only try to read the body if the request is a POST.
+            //  This assumes that no GET or HEAD requests will ever contain a body,
+            //  which is not necessarily a correct assumption according to RFC 2616
+            //  We should try to implement this in a more elegant fashion
 
-            // Sleep the thread, to give inReader time to "catch up",
-            // otherwise we sometimes end up with false return from inRead.ready()...
-            Thread.sleep(1);
-
-
-            // Adding request body to Builder
             StringBuilder bodyBuilder = new StringBuilder();
-            //inReader.lines().forEach(body::append);
-//            String whatTheFuck = inReader.readLine();
-//            logger.info("What the fuck is this? " + whatTheFuck);
-            logger.info("Building request body string.");
-            while (inReader.ready()) {
-                String bodyLine = inReader.readLine();
-                bodyBuilder.append(bodyLine).append("\r\n"); // Append current line
-                //logger.info("Line appended to body: " + bodyLine);
-            }// Done constructing body string
+            if (method.equalsIgnoreCase("POST")) {
+                // Adding request body to Builder
+                logger.info("Building request body string.");
 
+                // TODO: 01/03/2021 Find some better solution to the below.
+                //  Some way to wait for line, only if we are certain there will be one.
+
+                // Sleep the thread, to give inReader time to "catch up",
+                // otherwise we sometimes end up with false return from inRead.ready()...
+                Thread.sleep(1);
+
+                do {
+                    bodyBuilder.append((char) inReader.read());
+                } while (inReader.ready());
+
+            }
             String body = bodyBuilder.toString();
             // Add body string to Builder
             if (!body.isBlank()) {
@@ -204,6 +209,8 @@ public class HTTPServer {
                 // Don't add body if blank
                 logger.info("Body string is blank, nothing to add.");
             }
+
+
 
             // Finally we build the HTTPRequest object
             request = reqBuilder.build();

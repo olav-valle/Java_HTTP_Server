@@ -5,8 +5,12 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
-import java.util.Map;
+import java.util.Locale;
 import java.util.logging.*;
 import java.util.stream.Collectors;
 
@@ -21,7 +25,15 @@ public class HTTPServer {
     // Port Setting
     static final int PORT = 8080;
     //verbose mode to console output.
+
+    // DEBUGGING
+    // todo: remove
+    // ----------------------------------------------
     static final boolean verbose = true;
+    // Set this field to dump request message to terminal, instead of handling it
+    private static final boolean DUMP_REQUEST_TO_TERMINAL = false;
+    // ----------------------------------------------
+
 
     // Logging
     private static Logger logger;
@@ -31,6 +43,7 @@ public class HTTPServer {
     public static void main(String[] args) {
         logger = Logger.getLogger("ServerLog");
         consoleLogger = new ConsoleHandler();
+        consoleLogger.setFormatter(new SimpleFormatter());
         try {
             fileLogger = new FileHandler(
                     "%h/git/appdev_http/log.txt", true);
@@ -74,17 +87,27 @@ public class HTTPServer {
             //Read characters from the client via input stream.
             inReader = new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
 
-            //Parse HTTP request.
-            HTTPRequest request = parseRequest(inReader);
+            if (DUMP_REQUEST_TO_TERMINAL) {
+                dumpRequest(inReader);
+            } else {
+                //Parse HTTP request.
 
-            // Format and send response
-            HTTPResponse response = formatResponse(request);
+                HTTPRequest request = parseRequest(inReader);
 
-            // buffer the socket output stream
-            outStream = new BufferedOutputStream(connectionSocket.getOutputStream());
+                // Format and send response
+                HTTPResponse response = formatResponse(request);
 
-            // Send message
-            writeOutAndFlush(outStream, response);
+                // buffer the socket output stream
+                outStream = new BufferedOutputStream(connectionSocket.getOutputStream());
+
+                // Send message
+                if (response != null) {
+                    writeOutAndFlush(outStream, response);
+                } else {
+                    outStream.flush();
+                }
+                closeConnection(connectionSocket, inReader, outStream);
+            }
 
         } catch (IOException e) {
             System.out.println("IO EXCEPTION: " + e.getMessage());
@@ -94,32 +117,10 @@ public class HTTPServer {
         return false;
     }
 
-    private static void writeOutAndFlush(BufferedOutputStream outStream, HTTPResponse response) {
-        // PrintWriter is buffered by outStream
-        PrintWriter writeOut = new PrintWriter(outStream);
-
-        // Format and append the response status-line to message
-        // HTTP-Version SP Status-Code SP Reason-Phrase CRLF
-        writeOut.println(
-                response.getVersion()
-                        + " " +
-                        response.getStatusCode()
-                        + " " +
-                        response.getReasonPhrase());
-
-        // Append head fields to response message
-        response.getHeadFields()
-                .entrySet()
-                .stream()
-                .map(entry -> entry.getKey() + ": " + entry.getValue())
-                .forEach(writeOut::println);
-
-        // Append message body to response
-        writeOut.println(response.getBody());
-
-        // Flush writer and output stream.
-        writeOut.flush();
+    private static void dumpRequest(BufferedReader in) {
+        in.lines().forEach(System.out::println);
     }
+
     /**
      * Parses the content of a BufferedReader, creating an HTTPRequest object from its contents.
      * This method naively parses any BufferedReader object as if its contents had the
@@ -152,7 +153,7 @@ public class HTTPServer {
 
             // todo:
             //  double check using the readLine function as loop invariants on these.
-            //  Will we get stuck on inner loop if it ends on
+            //  Will we get stuck on inner loop if inReader has no more lines?
 
             // todo:
             //  Is double check of ready() and blank new-line redundant?
@@ -173,23 +174,32 @@ public class HTTPServer {
                 logger.info("Done with header fields");
             }
 
+            // TODO: 01/03/2021 Find some better solution to the below.
+            //  Some way to wait for line, only if we are certain there will be one.
+
+            // Sleep the thread, to give inReader time to "catch up",
+            // otherwise we sometimes end up with false return from inRead.ready()...
+            Thread.sleep(1);
+
+
             // Adding request body to Builder
-            StringBuilder body = new StringBuilder();
+            StringBuilder bodyBuilder = new StringBuilder();
+            //inReader.lines().forEach(body::append);
+//            String whatTheFuck = inReader.readLine();
+//            logger.info("What the fuck is this? " + whatTheFuck);
+            logger.info("Building request body string.");
             while (inReader.ready()) {
-                logger.info("Building request body string.");
                 String bodyLine = inReader.readLine();
-
-                logger.info("Line to append is: " + bodyLine);
-                body.append(bodyLine).append("\r\n"); // Append current line
-
-                logger.info("Line appended to body: " + bodyLine);
+                bodyBuilder.append(bodyLine).append("\r\n"); // Append current line
+                //logger.info("Line appended to body: " + bodyLine);
             }// Done constructing body string
 
+            String body = bodyBuilder.toString();
             // Add body string to Builder
-            if (!body.toString().isBlank()) {
+            if (!body.isBlank()) {
                 // If body is not blank
                 logger.info("Body string added to request object");
-                reqBuilder.body(body.toString());
+                reqBuilder.body(body);
             } else {
                 // Don't add body if blank
                 logger.info("Body string is blank, nothing to add.");
@@ -199,11 +209,42 @@ public class HTTPServer {
             request = reqBuilder.build();
             logger.info("Printing request.toString:\n" + request.toString());
 
-        } catch (IOException ioe) {
+        } catch (IOException | InterruptedException ioe) {
             logger.info(ioe.toString());
         }
 
         return request;
+    }
+
+    private static void writeOutAndFlush(BufferedOutputStream outStream, HTTPResponse response) {
+        // PrintWriter is buffered by outStream
+        PrintWriter writeOut = new PrintWriter(outStream);
+
+        // Format and append the response status-line to message
+        // HTTP-Version SP Status-Code SP Reason-Phrase CRLF
+        writeOut.println(
+                response.getVersion()
+                        + " " +
+                        response.getStatusCode()
+                        + " " +
+                        response.getReasonPhrase());
+
+        // Append head fields to response message
+        response.getHeadFields()
+                .entrySet()
+                .stream()
+                .map(entry -> entry.getKey() + ": " + entry.getValue())
+                .forEach(writeOut::println);
+        writeOut.print("\r\n");
+
+        // Append message body, if any, to response
+        if (!response.getBody().equals("")) {
+
+            writeOut.println(response.getBody());
+        }
+
+        // Flush writer and output stream.
+        writeOut.flush();
     }
 
     /**
@@ -225,8 +266,6 @@ public class HTTPServer {
         }
     }
 
-    //todo: formatResponse()
-
     /**
      * Formats an HTTP response to the provided HTTP Request.
      *
@@ -236,24 +275,28 @@ public class HTTPServer {
      */
     private static HTTPResponse formatResponse(HTTPRequest request) {
         HTTPResponse response = null;
-        switch (request.getMethod()) {
+        HTTPResponse.Builder builder = null;
+        switch (request.getMethod().toUpperCase()) {
             case "GET":
                 logger.info("GET request");
-                response = handleGETRequest(request);
+                builder = handleGETRequest(request);
                 break;
             case "HEAD":
                 logger.info("HEAD request");
-                response = handleHEADRequest(request);
+                builder = handleHEADRequest(request);
                 break;
             case "POST":
                 logger.info("POST request");
-                response = handlePOSTRequest(request);
+                builder = handlePOSTRequest(request);
                 break;
             default:
                 logger.info("Not implemented");
-                response = handleNYIRequest(request);
+                builder = handleNYIRequest(request);
         }
-
+        if (builder != null) {
+            response = builder.build();
+        }
+        ;
         return response;
     }
 
@@ -262,69 +305,178 @@ public class HTTPServer {
      *
      * @param request The HTTPRequest representing the request message.
      */
-    private static HTTPResponse handleNYIRequest(HTTPRequest request) {
+    // TODO: 01/03/2021 Refactor this into createResponseBuilder
+    private static HTTPResponse.Builder handleNYIRequest(HTTPRequest request) {
         logger.info("Building response");
         HTTPResponse.Builder resBuilder = new HTTPResponse.Builder(request.getVersion(), "501", "Not Implemented");
 
         File file = new File(WEB_ROOT, METHOD_NOT_SUPPORTED);
-        try (BufferedReader r = new BufferedReader(new FileReader(new File(WEB_ROOT, METHOD_NOT_SUPPORTED)))) {
-            logger.info("Adding response body");
+        formatGeneralHeaders(resBuilder);
+        formatContentHeaders(resBuilder, file);
+        formatResponseBody(resBuilder, file);
 
-            // Adding element headers
+        return resBuilder;
+    }
+
+    /**
+     * Formats a response to a HEAD request message.
+     *
+     * @param request The HEAD request message to respond to.
+     * @return A Builder object for the response message.
+     */
+    private static HTTPResponse.Builder handleHEADRequest(HTTPRequest request) {
+        return formatMessage(request);
+    }
+
+    /**
+     * Formats a response to a GET request message.
+     *
+     * @param request The GET request message to respond to.
+     * @return A Builder object for the response message.
+     */
+    private static HTTPResponse.Builder handleGETRequest(HTTPRequest request) {
+        return formatMessage(request);
+    }
+
+    /**
+     * Creates an HTTPResponse builder object,
+     * which has the appropriate status-line, header fields and body content for
+     * the given HTTPRequest.
+     *
+     * @param request HTTPRequest object to create response for
+     * @return HTTPResponse message builder object
+     */
+    private static HTTPResponse.Builder formatMessage(HTTPRequest request) {
+        //Minimal response with only status-line
+        HTTPResponse.Builder response = createResponseBuilder(request);
+
+        File file;
+        if (request.getUrl().equals("/")) {
+            file = new File(WEB_ROOT, DEFAULT_FILE);        // Requested file was root, we return server specific default.
+        } else if (Files.exists(Path.of(request.getUrl()))) {
+            file = new File(WEB_ROOT, request.getUrl());    // Requested file exists
+        } else {
+            file = new File(WEB_ROOT, FILE_NOT_FOUND);      // Requested file does not exists
+        }
+
+        // General headers
+        formatGeneralHeaders(response);
+        // Content headers
+        formatContentHeaders(response, file);
+        // Response body, if request was GET
+        if (request.getMethod().equalsIgnoreCase("GET")) {
+            formatResponseBody(response, file);
+        }
+
+        return response;
+    }
+
+
+    //TODO: 01/03/2021 handlePOSTRequest
+    // 1. Ensure that HTTPRequest handles body correctly.
+    // 2. Implement methods used by POST tests: Poker, TextUpload and UserAuthenticate.
+    // 3. Expand formatting and header methods to handle eventual output from external methods above.
+    private static HTTPResponse.Builder handlePOSTRequest(HTTPRequest request) {
+
+        return null;
+    }
+
+
+    /**
+     * Creates a response message builder, and formats the status-line of the response based on the request message.
+     * The builder object can be expanded with header fields and a body, before being built.
+     *
+     * @param request HTTP request being responded to.
+     * @return A Builder object for an HTTP response, with only the status-line content.
+     */
+    public static HTTPResponse.Builder createResponseBuilder(HTTPRequest request) {
+        String statusCode = "";
+        String reasonPhrase = "";
+
+        // Status-Line
+        if (Files.exists(Path.of(request.getUrl()))) {
+            // 200 OK
+            statusCode = String.valueOf(HttpStatusCode.OK.getValue());
+            reasonPhrase = HttpStatusCode.OK.getDescription();
+        } else if (request.getMethod().equals("POST")) {
+            statusCode = String.valueOf(HttpStatusCode.OK.getValue());
+            reasonPhrase = HttpStatusCode.OK.getDescription();
+        } else {
+            // 404 File Not Found
+            statusCode = String.valueOf(HttpStatusCode.NOT_FOUND.getValue());
+            reasonPhrase = HttpStatusCode.NOT_FOUND.getDescription();
+        }
+        return new HTTPResponse
+                .Builder(request.getVersion(), // HTTP-version same as request
+                statusCode,
+                reasonPhrase);
+    }
+
+    /**
+     * Formats the general headers of an HTTP response.
+     *
+     * @param response Builder object for response message being formatted.
+     */
+    private static void formatGeneralHeaders(HTTPResponse.Builder response) {
+        //todo: add more general headers?
+
+        response.headField("Server", "Basic HTTP Server 0.1");
+
+        response.headField("Date", toServerHTTPTime(new Date().toInstant()));
+
+    }
+
+    /**
+     * Formats the content-related header fields of an HTTP response, like length and type.
+     *
+     * @param response Builder object for response message being formatted.
+     * @param file     the file holding the content, used for probing values.
+     */
+    private static void formatContentHeaders(HTTPResponse.Builder response, File file) {
+        try (BufferedReader r = new BufferedReader(new FileReader(file))) {
             String filetype = Files.probeContentType(file.toPath());
+            String modified = toServerHTTPTime(Files.getLastModifiedTime(file.toPath()).toInstant());
+            ;
             logger.info("Content-type from probe: " + filetype);
-            resBuilder.headField("Content-type:", filetype);
-            resBuilder.headField("Content-length:", String.valueOf(file.length()));
-            // adding response body from file
-            String body = r.lines().collect(Collectors.joining("\r\n"));
-            resBuilder.body(body.toString());
+            response.headField("Content-length", String.valueOf(file.length()));
+            response.headField("Content-type", filetype);
+            response.headField("Last-Modified", modified);
         } catch (IOException ioe) {
             logger.info(ioe.getMessage());
         }
-
-        return resBuilder.build();
     }
-
-    //todo: formatResponseHeader()
 
     /**
-     * Formats the header of an HTTP response.
+     * Adds the content of the requested file to the response message body.
+     *
+     * @param response Builder for response being formatted.
+     * @param file     File requested.
      */
-    private static void formatResponseHeader() {
-
+    private static void formatResponseBody(HTTPResponse.Builder response, File file) {
+        try (BufferedReader r = new BufferedReader(new FileReader(file))) {
+            logger.info("Adding response body");
+            // adding response body from file
+            String s = Files.readString(file.toPath());
+            response.body(s);
+        } catch (IOException ioe) {
+            logger.info(ioe.getMessage());
+        }
     }
-
-    //todo: formatResponseBody()
 
     /**
-     * Formats the body of an HTTP response. Usually, this involves appending the contents of a file.
+     * Formats the given Instant according to RFC 1123.
+     * Example: Sun, 06 Nov 1994 08:49:37 GMT.
+     *
+     * @param time The Instant to format.
+     * @return The Instant, formatted according to RFC 1123.
      */
-    private static void formatResponseBody() {
+    private static String toServerHTTPTime(Instant time) {
+        return DateTimeFormatter // RFC 1123 compliant HTTP time
+                .ofPattern("EEE, dd MMM yyyy HH:mm:ss z", Locale.ENGLISH)
+                .withZone(ZoneId.of("GMT"))
+                .format(time);
 
     }
 
-
-    //todo: handleHEADRequest
-    public static HTTPResponse handleHEADRequest(HTTPRequest request) {
-
-        return null;
-    }
-
-    //todo: handleGETRequest
-    public static HTTPResponse handleGETRequest(HTTPRequest request) {
-
-        return null;
-    }
-
-    //todo: handlePOSTRequest
-    private static HTTPResponse handlePOSTRequest(HTTPRequest request) {
-
-        return null;
-    }
-
-    private static void log(String logMessage) {
-        logger.finest(logMessage);
-
-    }
 
 }

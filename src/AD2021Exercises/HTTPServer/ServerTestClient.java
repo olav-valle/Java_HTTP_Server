@@ -10,13 +10,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 public class ServerTestClient {
-    static final int EXERCISE_NUM = 1; //exercise questions. Changed to for-loop in main.
-    static final String FILE_PATH = "/home/mort/git/appdev_http/src/AD2021/HTTPServer1/testfile.txt";
-    static final String ORG_WEB_TEXT = "C:\\ProPro\\Classes\\2021 Application Development\\Exercises\\WebText.txt";
+
+    static final String FILE_PATH = "/home/mort/git/appdev_http/src/AD2021Exercises/HTTPServer/testfile.html";
 
     public static void main(String[] args) throws IOException {
 
-        for (int i = 1; i < 2; i++) {
+        for (int i = 1; i < 10; i++) {
             System.out.println("\n------\nRunning case " + i + "\n------");
             try {
                 Socket s = new Socket(InetAddress.getByName("localhost"), 8080);
@@ -137,7 +136,14 @@ public class ServerTestClient {
         //request body formation.
         if (bodyFlag) {
             //Change to your own txt file
-            Files.copy(Path.of(FILE_PATH), s.getOutputStream());
+            //Files.lines(Path.of(FILE_PATH)).forEach(System.out::println);
+            //Files.lines(Path.of(FILE_PATH)).forEach(pw::println);
+
+            for(String line : Files.readAllLines(Path.of(FILE_PATH))) {
+                pw.print(line + "\r\n");
+            }
+
+            // Files.copy(Path.of(FILE_PATH), s.getOutputStream());
         }
         pw.flush();
     }

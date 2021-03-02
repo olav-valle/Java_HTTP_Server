@@ -23,7 +23,7 @@ public class ServerTestClient {
                 BufferedReader br = new BufferedReader(new InputStreamReader(s.getInputStream()));
 
                 String response;
-                switch (9) {
+                switch (i) {
                     //To test 501 not implemented
                     case 1:
                         System.out.println("1. Method not supported.");

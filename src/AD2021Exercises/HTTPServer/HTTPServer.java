@@ -174,10 +174,15 @@ public class HTTPServer {
                 logger.info("Done with header fields");
             }
 
-            // Adding request body to Builder
+            // TODO: 01/03/2021 Find some better solution to the below.
+            //  Some way to wait for line, only if we are certain there will be one.
 
+            // Sleep the thread, to give inReader time to "catch up",
+            // otherwise we sometimes end up with false return from inRead.ready()...
             Thread.sleep(1);
 
+
+            // Adding request body to Builder
             StringBuilder bodyBuilder = new StringBuilder();
             //inReader.lines().forEach(body::append);
 //            String whatTheFuck = inReader.readLine();

@@ -1,6 +1,5 @@
-package AD2021Exercises.HTTPServer;
+package HTTPServer.HTTPMessage;
 
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 
 /**

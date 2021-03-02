@@ -1,5 +1,11 @@
-package AD2021Exercises.HTTPServer;
+package HTTPServer;
 
+
+import HTTPServer.HTTPMessage.HTTPRequest;
+import HTTPServer.HTTPMessage.HTTPResponse;
+import HTTPServer.HTTPStatusCode.HttpStatusCode;
+import HTTPServer.Services.PokerSend;
+import HTTPServer.Services.ValidUserName;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -22,10 +28,12 @@ public class HTTPServer {
 
 
 
-    static File WEB_ROOT = new File("/home/mort/git/appdev_http/lib");
+    static File WEB_ROOT; // Stores probed working directory
+    // Literal directory and file names used as fake server "file system"
+    static final String ROOT_NAME = "web_root";
     static final String DEFAULT_FILE = "index.html";
     static final String FILE_NOT_FOUND = "404.html";
-    static final String METHOD_NOT_SUPPORTED = "not_supported.html";
+    static final String METHOD_NOT_SUPPORTED = "501.html";
 
     // Port Setting
     static final int PORT = 8080;
@@ -39,23 +47,14 @@ public class HTTPServer {
 
     // Logging
     private static Logger logger;
-    private static ConsoleHandler consoleLogger;
     private static FileHandler fileLogger;
 
     public static void main(String[] args) {
-        WEB_ROOT = new File(System.getProperty("user.dir"));
-        logger = Logger.getLogger("ServerLog");
-        consoleLogger = new ConsoleHandler();
-        consoleLogger.setFormatter(new SimpleFormatter());
-        try {
-            fileLogger = new FileHandler(
-                    "%h/git/appdev_http/log.txt", true);
-            fileLogger.setFormatter(consoleLogger.getFormatter());
 
-            logger.addHandler(fileLogger);
-        } catch (IOException ioe) {
-            logger.info("Failed to create log file 'log.txt'. IOException: \n" + ioe.getMessage());
-        }
+        WEB_ROOT = new File(System.getProperty("user.dir") + "/"+ ROOT_NAME);
+
+        // Set up logger
+        loggerSetup();
 
         try {
             ServerSocket listenSocket = new ServerSocket(PORT);
@@ -74,6 +73,23 @@ public class HTTPServer {
             System.out.println("Server error as: " + e);
         }
 
+    }
+
+    /**
+     * Sets up system logging for server.
+     */
+    private static void loggerSetup() {
+        logger = Logger.getLogger("ServerLog");
+        ConsoleHandler consoleLogger = new ConsoleHandler();
+        consoleLogger.setFormatter(new SimpleFormatter());
+        try {
+            fileLogger = new FileHandler(
+                    WEB_ROOT.getPath() + "/serverLog%u.log", true);
+            fileLogger.setFormatter(consoleLogger.getFormatter());
+            logger.addHandler(fileLogger);
+        } catch (IOException ioe) {
+            logger.info("Failed to create log file 'log.txt'. IOException: \n" + ioe.getMessage());
+        }
     }
 
     /**
@@ -108,6 +124,7 @@ public class HTTPServer {
                 if (response != null) {
                     writeOutAndFlush(outStream, response);
                     logger.info("Response Returned.");
+
                 } else {
                     outStream.flush();
                 }
@@ -122,6 +139,10 @@ public class HTTPServer {
         return false;
     }
 
+    /**
+     * Debugging function for dumping the request literal to stdout.
+     * @param in
+     */
     private static void dumpRequest(BufferedReader in) {
         in.lines().forEach(System.out::println);
     }
@@ -364,6 +385,8 @@ public class HTTPServer {
      */
     private static HTTPResponse.Builder handlePOSTRequest(HTTPRequest request) {
         HTTPResponse.Builder response = formatMessage(request);
+
+        // Add request body to response message body
         response.body("\r\n\r\n");
         response.body("Request body is: ");
         response.body("\r\n\r\n");
@@ -390,13 +413,15 @@ public class HTTPServer {
     }
 
     private static void POSTUserTextUpload(HTTPRequest request, HTTPResponse.Builder response) {
-        String fileName = WEB_ROOT + "/message-" + new Date() + ".txt";
+        String fileName = "/message-" + new Date() + ".txt";
+        String filePath = WEB_ROOT + fileName;
         try {
-            File messageFile = new File(fileName);
+            File messageFile = new File(filePath);
             if (messageFile.createNewFile()){
-                FileWriter fw = new FileWriter(fileName);
+                FileWriter fw = new FileWriter(filePath);
                 fw.write(request.getBody());
                 fw.close();
+                response.body("File upload succeeded. The path is /" + ROOT_NAME + fileName + "\r\n");
             } else {
                 logger.info("File " + fileName + " somehow already existst... \n" +
                         "Cannot write.");
@@ -404,7 +429,6 @@ public class HTTPServer {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        response.body("File upload succeeded. The path is /lib/\r\n");
     }
 
     private static void POSTUserValidation(HTTPResponse.Builder response, HTTPRequest request) {

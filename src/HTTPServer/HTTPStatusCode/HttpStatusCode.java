@@ -1,4 +1,4 @@
-package AD2021Exercises.HTTPServer;
+package HTTPServer.HTTPStatusCode;
 
 /**
  * Enum of HTTP response codes.

@@ -1,4 +1,4 @@
-package AD2021Exercises.HTTPServer;
+package HTTPServer;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -11,13 +11,10 @@ import java.nio.file.Path;
 
 public class ServerTestClient {
 
-    static final String FILE_PATH =
-            "/home/mort/git/appdev_http/src/" +
-                    "AD2021Exercises/HTTPServer/" +
-                    "testfile.html";
+    static String FILE_PATH;
 
     public static void main(String[] args) throws IOException {
-
+        FILE_PATH = System.getProperty("user.dir") +  "/test/HTTPServer/testfile.html";
         for (int i = 1; i < 10; i++) {
             System.out.println("\n------\nRunning case " + i + "\n------");
             try {

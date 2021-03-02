@@ -14,7 +14,7 @@ public class ServerTestClient {
     static final String FILE_PATH =
             "/home/mort/git/appdev_http/src/" +
                     "AD2021Exercises/HTTPServer/" +
-                    "4xtestfile.txt";
+                    "testfile.html";
 
     public static void main(String[] args) throws IOException {
 

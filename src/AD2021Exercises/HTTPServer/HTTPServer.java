@@ -406,6 +406,8 @@ public class HTTPServer {
             default:
 
         }
+        // Update response message with correct content-length header
+        response.headField("Content-length", String.valueOf(response.getBodyLength()));
 
         return response;
     }

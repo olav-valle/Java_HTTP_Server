@@ -124,6 +124,15 @@ public class HTTPResponse {
             this.body += bodyString;
             return this;
         }
+
+        /**
+         * Get the current size of the response message body.
+         * @return current size of the response message body.
+         */
+        public int getBodyLength(){
+            return body.length();
+        }
+
         /**
          * Builds and returns this HTTP response message object.
          *

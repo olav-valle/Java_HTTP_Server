@@ -121,7 +121,7 @@ public class HTTPResponse {
          * @return This builder object.
          */
         public Builder body(String bodyString) {
-            this.body = bodyString;
+            this.body += bodyString;
             return this;
         }
         /**

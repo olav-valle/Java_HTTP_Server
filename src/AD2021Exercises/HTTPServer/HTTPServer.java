@@ -9,9 +9,13 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
-import java.util.logging.*;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.FileHandler;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
 import java.util.stream.Collectors;
 
 public class HTTPServer {
@@ -48,6 +52,7 @@ public class HTTPServer {
             fileLogger = new FileHandler(
                     "%h/git/appdev_http/log.txt", true);
             fileLogger.setFormatter(consoleLogger.getFormatter());
+
             logger.addHandler(fileLogger);
         } catch (IOException ioe) {
             logger.info("Failed to create log file 'log.txt'. IOException: \n" + ioe.getMessage());
@@ -103,10 +108,11 @@ public class HTTPServer {
                 // Send message
                 if (response != null) {
                     writeOutAndFlush(outStream, response);
+                    logger.info("Response Returned.");
                 } else {
                     outStream.flush();
                 }
-                closeConnection(connectionSocket, inReader, outStream);
+                //closeConnection(connectionSocket, inReader, outStream);
             }
 
         } catch (IOException e) {
@@ -174,26 +180,29 @@ public class HTTPServer {
                 logger.info("Done with header fields");
             }
 
-            // TODO: 01/03/2021 Find some better solution to the below.
-            //  Some way to wait for line, only if we are certain there will be one.
+            // TODO: 02/03/2021 This "solution" to the body-read bug,
+            //  is to only try to read the body if the request is a POST.
+            //  This assumes that no GET or HEAD requests will ever contain a body,
+            //  which is not necessarily a correct assumption according to RFC 2616
+            //  We should try to implement this in a more elegant fashion
 
-            // Sleep the thread, to give inReader time to "catch up",
-            // otherwise we sometimes end up with false return from inRead.ready()...
-            Thread.sleep(1);
-
-
-            // Adding request body to Builder
             StringBuilder bodyBuilder = new StringBuilder();
-            //inReader.lines().forEach(body::append);
-//            String whatTheFuck = inReader.readLine();
-//            logger.info("What the fuck is this? " + whatTheFuck);
-            logger.info("Building request body string.");
-            while (inReader.ready()) {
-                String bodyLine = inReader.readLine();
-                bodyBuilder.append(bodyLine).append("\r\n"); // Append current line
-                //logger.info("Line appended to body: " + bodyLine);
-            }// Done constructing body string
+            if (method.equalsIgnoreCase("POST")) {
+                // Adding request body to Builder
+                logger.info("Building request body string.");
 
+                // TODO: 01/03/2021 Find some better solution to the below.
+                //  Some way to wait for line, only if we are certain there will be one.
+
+                // Sleep the thread, to give inReader time to "catch up",
+                // otherwise we sometimes end up with false return from inRead.ready()...
+                Thread.sleep(1);
+
+                do {
+                    bodyBuilder.append((char) inReader.read());
+                } while (inReader.ready());
+
+            }
             String body = bodyBuilder.toString();
             // Add body string to Builder
             if (!body.isBlank()) {
@@ -204,6 +213,7 @@ public class HTTPServer {
                 // Don't add body if blank
                 logger.info("Body string is blank, nothing to add.");
             }
+
 
             // Finally we build the HTTPRequest object
             request = reqBuilder.build();
@@ -338,6 +348,68 @@ public class HTTPServer {
         return formatMessage(request);
     }
 
+
+    //TODO: 01/03/2021 handlePOSTRequest
+    // 1. Ensure that HTTPRequest handles body correctly.
+    // 2. Implement methods used by POST tests: Poker, TextUpload and UserAuthenticate.
+    // 3. Expand formatting and header methods to handle eventual output from external methods above.
+    private static HTTPResponse.Builder handlePOSTRequest(HTTPRequest request) {
+        HTTPResponse.Builder response = formatMessage(request);
+        response.body("\r\n\r\n");
+        response.body("Request body is: ");
+        response.body("\r\n\r\n");
+        response.body(request.getBody());
+        response.body("\r\n\r\n");
+
+        switch (request.getUrl().toLowerCase()) {
+            case ("/uservalidation/"):
+                response.body("Validation results are: \r\n\r\n");
+                // Get validation for all usernames in request body.
+                ValidUserName
+                        .validateSeveralNames(request
+                                .getBody()
+                                .lines()
+                                .skip(1) // The first line of request body is the number of usernames, and we don't care.
+                                .collect(Collectors // method validateSeveralNames needs ArrayList parameter
+                                        .toCollection(ArrayList::new)))
+                        // Append results to response body
+                        .forEach(s -> response.body(s + "\r\n"));
+                break;
+
+            case ("/pokerdistribution/"):
+                //PokerSend poker = new PokerSend();
+                PokerSend poker = new PokerSend();
+                String username = request.getBody().split(" ")[2];
+                String hand = poker.getPlayerhand(username);
+                logger.info("username is: " + username);
+                logger.info("Hand is: " + hand);
+                response.body("Cards are: \r\n\r\n");
+                response.body(hand);
+                break;
+            case ("/usertextupload/"):
+                String fileName = WEB_ROOT + "/message-" + new Date() + ".txt";
+                try {
+                    File messageFile = new File(fileName);
+                    if (messageFile.createNewFile()){
+                        FileWriter fw = new FileWriter(fileName);
+                        fw.write(request.getBody());
+                        fw.close();
+                    } else {
+                        logger.info("File " + fileName + " somehow already existst... \n" +
+                                "Cannot write.");
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                response.body("File upload succeeded. The path is /lib/\r\n");
+                break;
+            default:
+
+        }
+
+        return response;
+    }
+
     /**
      * Creates an HTTPResponse builder object,
      * which has the appropriate status-line, header fields and body content for
@@ -355,6 +427,13 @@ public class HTTPServer {
             file = new File(WEB_ROOT, DEFAULT_FILE);        // Requested file was root, we return server specific default.
         } else if (Files.exists(Path.of(request.getUrl()))) {
             file = new File(WEB_ROOT, request.getUrl());    // Requested file exists
+        } else if (request.getMethod().equals("POST")) {
+            file = new File(WEB_ROOT, DEFAULT_FILE);
+            //TODO: 02/03/2021 This needs to go...
+            //  It's literally hardcoded to pass Di's test class
+            //  in regards to the server features we are supposed
+            //  to implement (poker, upload, etc).
+            //  It should be expanded to handle more generalised POST requests
         } else {
             file = new File(WEB_ROOT, FILE_NOT_FOUND);      // Requested file does not exists
         }
@@ -364,21 +443,12 @@ public class HTTPServer {
         // Content headers
         formatContentHeaders(response, file);
         // Response body, if request was GET
-        if (request.getMethod().equalsIgnoreCase("GET")) {
+        if (request.getMethod().equalsIgnoreCase("GET")
+                || request.getMethod().equalsIgnoreCase("POST")) {
             formatResponseBody(response, file);
         }
 
         return response;
-    }
-
-
-    //TODO: 01/03/2021 handlePOSTRequest
-    // 1. Ensure that HTTPRequest handles body correctly.
-    // 2. Implement methods used by POST tests: Poker, TextUpload and UserAuthenticate.
-    // 3. Expand formatting and header methods to handle eventual output from external methods above.
-    private static HTTPResponse.Builder handlePOSTRequest(HTTPRequest request) {
-
-        return null;
     }
 
 

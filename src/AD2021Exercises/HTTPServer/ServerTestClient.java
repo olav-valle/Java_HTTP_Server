@@ -11,7 +11,10 @@ import java.nio.file.Path;
 
 public class ServerTestClient {
 
-    static final String FILE_PATH = "/home/mort/git/appdev_http/src/AD2021Exercises/HTTPServer/testfile.html";
+    static final String FILE_PATH =
+            "/home/mort/git/appdev_http/src/" +
+                    "AD2021Exercises/HTTPServer/" +
+                    "testfile.html";
 
     public static void main(String[] args) throws IOException {
 
@@ -72,7 +75,6 @@ public class ServerTestClient {
                     default:
                         System.out.println("Wrong Exercise!!");
                 }
-
 
                 while ((response = br.readLine()) != null) System.out.println(response);
                 pw.close();
@@ -139,11 +141,11 @@ public class ServerTestClient {
             //Files.lines(Path.of(FILE_PATH)).forEach(System.out::println);
             //Files.lines(Path.of(FILE_PATH)).forEach(pw::println);
 
-            for(String line : Files.readAllLines(Path.of(FILE_PATH))) {
-                pw.print(line + "\r\n");
-            }
+//            for(String line : Files.readAllLines(Path.of(FILE_PATH))) {
+//                pw.print(line + "\r\n");
+//            }
 
-            // Files.copy(Path.of(FILE_PATH), s.getOutputStream());
+             Files.copy(Path.of(FILE_PATH), s.getOutputStream());
         }
         pw.flush();
     }

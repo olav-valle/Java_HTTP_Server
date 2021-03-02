@@ -7,3 +7,5 @@
 # Editor-based HTTP Client requests
 /httpRequests/
 /out/
+/web_root/message*
+/web_root/ServerLog*

@@ -1,4 +1,4 @@
-package AD2021Exercises.HTTPServer;
+package HTTPServer.Services;
 
 
 import java.util.*;
@@ -89,7 +89,7 @@ public class PokerSend {
 
     }
 
-    public static void main(String player) {
+    public static void main(String[] args) {
        new PokerSend();
     }
 

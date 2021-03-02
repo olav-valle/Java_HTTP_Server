@@ -85,15 +85,20 @@ public class HTTPResponse {
 
         /**
          * Build an HTTPResponse object.
+         * Parameters are NOT checked.
          * Required parameters are a minimal HTTP response status-line,
          * according to RFC 2616:
          * HTTP-Version SP Status-Code SP Reason-Phrase CRLF
+         *
          *
          * @param version      HTTP-Version of response.
          * @param statusCode   Response status code, according to RFC 2616
          * @param reasonPhrase Response Reason-Phrase according to RFC 2616
          */
         public Builder(String version, String statusCode, String reasonPhrase) {
+            //TODO: 02/03/2021 make this safer.
+            // Throw som param excepts and stuff.
+
             this.version = version;
             this.statusCode = statusCode;
             this.reasonPhrase = reasonPhrase;
@@ -101,25 +106,26 @@ public class HTTPResponse {
 
         /**
          * Add a field and value pair to response header.
+         * If field exists already, value is updated to parameter value.
          *
          * @param field Name of field to add
          * @param value Value of field to add
          * @return This builder object
          */
-        public Builder headField(String field, String value) {
+        public Builder addHeaderField(String field, String value) {
             this.headFields.put(field, value);
             return this;
         }
 
         /**
-         * Add a string to the response body.
+         * Append a string to the response body.
          * String can be a fully preformatted response body in a single string, or single lines from the body.
          * If single lines are used, correct line endings (CRLF) must be ensured by caller.
          *
          * @param bodyString HTTP response body as String.
          * @return This builder object.
          */
-        public Builder body(String bodyString) {
+        public Builder appendBodyString(String bodyString) {
             this.body += bodyString;
             return this;
         }

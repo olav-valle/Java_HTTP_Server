@@ -9,6 +9,7 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+//// TODO: 02/03/2021 Automate this stuff with some asserts or something...
 public class ServerTestClient {
 
     static String FILE_PATH;

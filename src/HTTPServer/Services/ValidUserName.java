@@ -1,4 +1,6 @@
-package AD2021Exercises.HTTPServer;
+package HTTPServer.Services;
+
+import HTTPServer.HTTPServer;
 
 import java.util.ArrayList;
 import java.util.Scanner;

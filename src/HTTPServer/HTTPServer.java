@@ -27,7 +27,6 @@ import java.util.stream.Collectors;
 public class HTTPServer {
 
 
-
     static File WEB_ROOT; // Stores probed working directory
     // Literal directory and file names used as fake server "file system"
     static final String ROOT_NAME = "web_root";
@@ -44,14 +43,13 @@ public class HTTPServer {
     private static final boolean DUMP_REQUEST_TO_TERMINAL = false;
 
 
-
     // Logging
     private static Logger logger;
     private static FileHandler fileLogger;
 
     public static void main(String[] args) {
 
-        WEB_ROOT = new File(System.getProperty("user.dir") + "/"+ ROOT_NAME);
+        WEB_ROOT = new File(System.getProperty("user.dir") + "/" + ROOT_NAME);
 
         // Set up logger
         loggerSetup();
@@ -61,13 +59,13 @@ public class HTTPServer {
             logger.info("Server started.... \n Port is open on " + PORT);
             //Listen until connection is required from user
 
-            // TODO: 02/03/2021 Make this close gracefully.
+            // TODO: 02/03/2021 Make this close gracefully. Add external shutdown command?
             // // TODO: 02/03/2021 Multi threading for request handling and clients?
-            while (true) {
+            do {
                 Socket connectionSocket = listenSocket.accept();
                 logger.info("Connection established on date: " + new Date() + "\n");
                 runServer(connectionSocket);
-            }
+            } while (true);
 
         } catch (IOException e) {
             System.out.println("Server error as: " + e);
@@ -85,7 +83,6 @@ public class HTTPServer {
         try {
             fileLogger = new FileHandler(
                     WEB_ROOT.getPath() + "/serverLog%u.log", true);
-            fileLogger.setFormatter(consoleLogger.getFormatter());
             logger.addHandler(fileLogger);
         } catch (IOException ioe) {
             logger.info("Failed to create log file 'log.txt'. IOException: \n" + ioe.getMessage());
@@ -96,9 +93,8 @@ public class HTTPServer {
      * Runs server functions.
      *
      * @param connectionSocket Socket which client is connected on.
-     * @return false, to signal socket connection is no longer open.
      */
-    private static boolean runServer(Socket connectionSocket) {
+    private static void runServer(Socket connectionSocket) {
         //Manage client connection.
         BufferedReader inReader = null;
         BufferedOutputStream outStream = null;
@@ -136,12 +132,12 @@ public class HTTPServer {
         } finally {
             closeConnection(connectionSocket, inReader, outStream);
         }
-        return false;
     }
 
     /**
-     * Debugging function for dumping the request literal to stdout.
-     * @param in
+     * Debugging function for dumping the HTTP request message literal to stdout.
+     *
+     * @param in BufferedReader to read message from.
      */
     private static void dumpRequest(BufferedReader in) {
         in.lines().forEach(System.out::println);
@@ -177,23 +173,19 @@ public class HTTPServer {
             reqBuilder = new HTTPRequest.Builder(method, url, version);
             logger.info("Successfully created request builder.");
 
-            // todo:
+
             //  double check using the readLine function as loop invariants on these.
             //  Will we get stuck on inner loop if inReader has no more lines?
             //  From my current understanding, readLine can halt the thread if there is not a
             //  complete line to read, and that using read(), which returns the next char value,
             //  into a char[], StringBuilder or similar is more reliable.
 
-            // todo:
-            //  Is double check of ready() and blank new-line redundant?
-            //  Needs some thinking...
-
             // Add request header fields to Builder
             if (inReader.ready()) { // Check for presence of first header line
                 String headLine = inReader.readLine();
                 while (!headLine.trim().isBlank()) { // Head ends with blank newline, i.e. "\r\n".
                     String[] keyValue = headLine.split(" "); // split into "FieldName:" "FieldValue"
-                    reqBuilder.headField(keyValue[0], keyValue[1]); // "FieldName:" is key, "FieldValue" is value
+                    reqBuilder.addHeaderField(keyValue[0], keyValue[1]); // "FieldName:" is key, "FieldValue" is value
                     if (inReader.ready()) { // next line from buffer, if present.
                         headLine = inReader.readLine();
                     } else { // or a blank line if not, just to ensure that the loop ends.
@@ -203,7 +195,7 @@ public class HTTPServer {
                 logger.info("Done with header fields");
             }
 
-            // TODO: 02/03/2021 This "solution" to the body-read bug,
+            // fixme: 02/03/2021 This "solution" to the POST content-read bug,
             //  is to only try to read the body if the request is a POST.
             //  This assumes that no GET or HEAD requests will ever contain a body,
             //  which is not necessarily a correct assumption according to RFC 2616
@@ -214,7 +206,7 @@ public class HTTPServer {
                 // Adding request body to Builder
                 logger.info("Building request body string.");
 
-                // TODO: 01/03/2021 Find some better solution to the below.
+                // fixme: 01/03/2021 Find some better solution to the below.
                 //  Some way to wait for line, only if we are certain there will be one.
                 // Sleep the thread, to give inReader time to "catch up",
                 // otherwise we sometimes end up with false return from inRead.ready()...
@@ -230,7 +222,7 @@ public class HTTPServer {
             if (!body.isBlank()) {
                 // If body is not blank
                 logger.info("Body string added to request object");
-                reqBuilder.body(body);
+                reqBuilder.appendBodyString(body);
             } else {
                 // Don't add body if blank
                 logger.info("Body string is blank, nothing to add.");
@@ -251,8 +243,9 @@ public class HTTPServer {
     /**
      * Writes an HTTPResponse message to the provided OutputStream.
      * Used to send the finished HTTP message to the client.
+     *
      * @param outStream OutputStream to write response message content to.
-     * @param response The HTTPResponse message to write out.
+     * @param response  The HTTPResponse message to write out.
      */
     private static void writeOutAndFlush(BufferedOutputStream outStream, HTTPResponse response) {
         // PrintWriter is buffered by outStream
@@ -336,6 +329,7 @@ public class HTTPServer {
         if (builder != null) {
             response = builder.build();
         }
+
         return response;
     }
 
@@ -387,11 +381,11 @@ public class HTTPServer {
         HTTPResponse.Builder response = formatMessage(request);
 
         // Add request body to response message body
-        response.body("\r\n\r\n");
-        response.body("Request body is: ");
-        response.body("\r\n\r\n");
-        response.body(request.getBody());
-        response.body("\r\n\r\n");
+        response.appendBodyString("\r\n\r\n");
+        response.appendBodyString("Request body is: ");
+        response.appendBodyString("\r\n\r\n");
+        response.appendBodyString(request.getBody());
+        response.appendBodyString("\r\n\r\n");
 
         switch (request.getUrl().toLowerCase()) {
             case ("/uservalidation/"):
@@ -401,38 +395,52 @@ public class HTTPServer {
                 POSTPoker(response, request);
                 break;
             case ("/usertextupload/"):
-                POSTUserTextUpload(request, response);
+                // Shouldn't this be a PUT request, not POST..?
+                try {
+                    String filePath = POSTUserTextUpload(request);
+                    response.appendBodyString("File upload succeeded. The path is /" + filePath + "\r\n");
+                } catch (IOException e) {
+                    response.appendBodyString("File upload failed.");
+                    e.printStackTrace();
+                }
                 break;
             default:
-
         }
         // Update response message with correct content-length header
-        response.headField("Content-length", String.valueOf(response.getBodyLength()));
+        response.addHeaderField("Content-length", String.valueOf(response.getBodyLength()));
 
         return response;
     }
 
-    private static void POSTUserTextUpload(HTTPRequest request, HTTPResponse.Builder response) {
+    /**
+     * Reads POST request message body content into a file.
+     *
+     * @param request POST request message to read into file.
+     * @return the path and name of the created file.
+     */
+    private static String POSTUserTextUpload(HTTPRequest request) throws IOException {
         String fileName = "/message-" + new Date() + ".txt";
         String filePath = WEB_ROOT + fileName;
+        String returnValue = "";
         try {
             File messageFile = new File(filePath);
-            if (messageFile.createNewFile()){
+            if (messageFile.createNewFile()) {
                 FileWriter fw = new FileWriter(filePath);
                 fw.write(request.getBody());
                 fw.close();
-                response.body("File upload succeeded. The path is /" + ROOT_NAME + fileName + "\r\n");
+                returnValue = ROOT_NAME + fileName;
             } else {
                 logger.info("File " + fileName + " somehow already existst... \n" +
                         "Cannot write.");
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            throw e;
         }
+        return returnValue;
     }
 
     private static void POSTUserValidation(HTTPResponse.Builder response, HTTPRequest request) {
-        response.body("Validation results are: \r\n\r\n");
+        response.appendBodyString("Validation results are: \r\n\r\n");
         // Get validation for all usernames in request body.
         ValidUserName
                 .validateSeveralNames(request
@@ -442,7 +450,7 @@ public class HTTPServer {
                         .collect(Collectors // method validateSeveralNames needs ArrayList parameter
                                 .toCollection(ArrayList::new)))
                 // Append results to response body
-                .forEach(s -> response.body(s + "\r\n"));
+                .forEach(s -> response.appendBodyString(s + "\r\n"));
     }
 
     private static void POSTPoker(HTTPResponse.Builder response, HTTPRequest request) {
@@ -452,10 +460,9 @@ public class HTTPServer {
         String hand = poker.getPlayerhand(username);
         logger.info("username is: " + username);
         logger.info("Hand is: " + hand);
-        response.body("Cards are: \r\n\r\n");
-        response.body(hand);
+        response.appendBodyString("Cards are: \r\n\r\n");
+        response.appendBodyString(hand);
     }
-
 
 
     /**
@@ -506,28 +513,33 @@ public class HTTPServer {
      *
      * @param request HTTP request being responded to.
      * @return A Builder object for an HTTP response, with only the status-line content.
+     * Null if object creation fails for any reason.
      */
     private static HTTPResponse.Builder createResponseBuilder(HTTPRequest request) {
-        String statusCode = "";
-        String reasonPhrase = "";
+        HTTPResponse.Builder builder = null;
+        if (request != null) {
+            String statusCode = "";
+            String reasonPhrase = "";
+            HttpStatusCode status;
 
-        // Status-Line
-        if (Files.exists(Path.of(request.getUrl()))) {
-            // 200 OK
-            statusCode = String.valueOf(HttpStatusCode.OK.getValue());
-            reasonPhrase = HttpStatusCode.OK.getDescription();
-        } else if (request.getMethod().equals("POST")) {
-            statusCode = String.valueOf(HttpStatusCode.OK.getValue());
-            reasonPhrase = HttpStatusCode.OK.getDescription();
-        } else {
-            // 404 File Not Found
-            statusCode = String.valueOf(HttpStatusCode.NOT_FOUND.getValue());
-            reasonPhrase = HttpStatusCode.NOT_FOUND.getDescription();
+            // Status-Line
+            if (Files.exists(Path.of(request.getUrl())) || request.getMethod().equals("POST")) {
+                // 200 OK
+                status = HttpStatusCode.getByValue(200);
+            } else {
+                // 404 File Not Found
+                status = HttpStatusCode.getByValue(404);
+            }
+
+            statusCode = String.valueOf(status.getValue());
+            reasonPhrase = status.getDescription();
+
+            builder = new HTTPResponse
+                    .Builder(request.getVersion(), // HTTP-version same as request
+                    statusCode,
+                    reasonPhrase);
         }
-        return new HTTPResponse
-                .Builder(request.getVersion(), // HTTP-version same as request
-                statusCode,
-                reasonPhrase);
+        return builder;
     }
 
     /**
@@ -536,11 +548,9 @@ public class HTTPServer {
      * @param response Builder object for response message being formatted.
      */
     private static void formatGeneralHeaders(HTTPResponse.Builder response) {
-        //todo: add more general headers?
 
-        response.headField("Server", "Basic HTTP Server 0.1");
-
-        response.headField("Date", toServerHTTPTime(new Date().toInstant()));
+        response.addHeaderField("Server", "Basic HTTP Server 0.1");
+        response.addHeaderField("Date", toServerHTTPTime(new Date().toInstant()));
 
     }
 
@@ -556,9 +566,9 @@ public class HTTPServer {
             String modified = toServerHTTPTime(Files.getLastModifiedTime(file.toPath()).toInstant());
             ;
             logger.info("Content-type from probe: " + filetype);
-            response.headField("Content-length", String.valueOf(file.length()));
-            response.headField("Content-type", filetype);
-            response.headField("Last-Modified", modified);
+            response.addHeaderField("Content-length", String.valueOf(file.length()));
+            response.addHeaderField("Content-type", filetype);
+            response.addHeaderField("Last-Modified", modified);
         } catch (IOException ioe) {
             logger.info(ioe.getMessage());
         }
@@ -575,7 +585,7 @@ public class HTTPServer {
             logger.info("Adding response body");
             // adding response body from file
             String s = Files.readString(file.toPath());
-            response.body(s);
+            response.appendBodyString(s);
         } catch (IOException ioe) {
             logger.info(ioe.getMessage());
         }

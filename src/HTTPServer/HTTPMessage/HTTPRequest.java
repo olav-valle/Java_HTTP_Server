@@ -111,32 +111,33 @@ public class HTTPRequest {
          * @param version HTTP version used by request.
          */
         public Builder(String method, String url, String version) {
-            // No checks for method validity, since server class
-            // determines which methods are supported/implemented.
+            //TODO: 02/03/2021 make this safer.
+            // Throw som param excepts and stuff.
             this.method = method.toUpperCase();
             this.url = url;
             this.version = version.toUpperCase();
         }
 
         /**
-         * Add field and value to request head
+         * Add field and value to request head.
+         * If field is present already, value is updated to new value.
          *
          * @param field Name of field to add.
          * @param value Value of field to add.
          * @return This Builder object.
          */
-        public Builder headField(String field, String value) {
+        public Builder addHeaderField(String field, String value) {
             this.headFields.put(field, value);
             return this;
         }
 
         /**
-         * Add string to request body.
+         * Append string to request body.
          *
-         * @param bodyText
-         * @return
+         * @param bodyText String to append to request body.
+         * @return This Builder object.
          */
-        public Builder body(String bodyText) {
+        public Builder appendBodyString(String bodyText) {
             this.body = this.body + bodyText;
             return this;
         }

@@ -76,7 +76,6 @@ public class HTTPRequest {
     public String toString() {
         StringBuilder s = new StringBuilder();
         s.append(method).append(" ").append(url).append(" ").append(version).append(" \n");
-        // todo: concat head field: value
         for (String k : headFields.keySet()){
             s.append(k) //field
                     .append(" ")

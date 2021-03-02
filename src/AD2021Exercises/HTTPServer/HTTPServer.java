@@ -21,22 +21,20 @@ import java.util.stream.Collectors;
 public class HTTPServer {
 
 
-    static final File WEB_ROOT = new File("/home/mort/git/appdev_http/lib");
+
+    static File WEB_ROOT = new File("/home/mort/git/appdev_http/lib");
     static final String DEFAULT_FILE = "index.html";
     static final String FILE_NOT_FOUND = "404.html";
     static final String METHOD_NOT_SUPPORTED = "not_supported.html";
 
     // Port Setting
     static final int PORT = 8080;
-    //verbose mode to console output.
 
     // DEBUGGING
-    // todo: remove
     // ----------------------------------------------
-    static final boolean verbose = true;
     // Set this field to dump request message to terminal, instead of handling it
     private static final boolean DUMP_REQUEST_TO_TERMINAL = false;
-    // ----------------------------------------------
+
 
 
     // Logging
@@ -45,6 +43,7 @@ public class HTTPServer {
     private static FileHandler fileLogger;
 
     public static void main(String[] args) {
+        WEB_ROOT = new File(System.getProperty("user.dir"));
         logger = Logger.getLogger("ServerLog");
         consoleLogger = new ConsoleHandler();
         consoleLogger.setFormatter(new SimpleFormatter());
@@ -63,11 +62,11 @@ public class HTTPServer {
             logger.info("Server started.... \n Port is open on " + PORT);
             //Listen until connection is required from user
 
+            // TODO: 02/03/2021 Make this close gracefully.
+            // // TODO: 02/03/2021 Multi threading for request handling and clients?
             while (true) {
                 Socket connectionSocket = listenSocket.accept();
-                if (verbose) {
-                    logger.info("Connection established on date: " + new Date() + "\n");
-                }
+                logger.info("Connection established on date: " + new Date() + "\n");
                 runServer(connectionSocket);
             }
 
@@ -160,6 +159,9 @@ public class HTTPServer {
             // todo:
             //  double check using the readLine function as loop invariants on these.
             //  Will we get stuck on inner loop if inReader has no more lines?
+            //  From my current understanding, readLine can halt the thread if there is not a
+            //  complete line to read, and that using read(), which returns the next char value,
+            //  into a char[], StringBuilder or similar is more reliable.
 
             // todo:
             //  Is double check of ready() and blank new-line redundant?
@@ -193,7 +195,6 @@ public class HTTPServer {
 
                 // TODO: 01/03/2021 Find some better solution to the below.
                 //  Some way to wait for line, only if we are certain there will be one.
-
                 // Sleep the thread, to give inReader time to "catch up",
                 // otherwise we sometimes end up with false return from inRead.ready()...
                 Thread.sleep(1);
@@ -226,6 +227,12 @@ public class HTTPServer {
         return request;
     }
 
+    /**
+     * Writes an HTTPResponse message to the provided OutputStream.
+     * Used to send the finished HTTP message to the client.
+     * @param outStream OutputStream to write response message content to.
+     * @param response The HTTPResponse message to write out.
+     */
     private static void writeOutAndFlush(BufferedOutputStream outStream, HTTPResponse response) {
         // PrintWriter is buffered by outStream
         PrintWriter writeOut = new PrintWriter(outStream);
@@ -286,6 +293,8 @@ public class HTTPServer {
     private static HTTPResponse formatResponse(HTTPRequest request) {
         HTTPResponse response = null;
         HTTPResponse.Builder builder = null;
+
+        // Add more cases here as other HTTP methods are implemented.
         switch (request.getMethod().toUpperCase()) {
             case "GET":
                 logger.info("GET request");
@@ -306,16 +315,14 @@ public class HTTPServer {
         if (builder != null) {
             response = builder.build();
         }
-        ;
         return response;
     }
 
     /**
-     * Handler for request methods not yet implemented. Default in request handler switch case.
+     * Handler for HTTP methods that are not yet implemented.
      *
      * @param request The HTTPRequest representing the request message.
      */
-    // TODO: 01/03/2021 Refactor this into createResponseBuilder
     private static HTTPResponse.Builder handleNYIRequest(HTTPRequest request) {
         logger.info("Building response");
         HTTPResponse.Builder resBuilder = new HTTPResponse.Builder(request.getVersion(), "501", "Not Implemented");
@@ -349,10 +356,12 @@ public class HTTPServer {
     }
 
 
-    //TODO: 01/03/2021 handlePOSTRequest
-    // 1. Ensure that HTTPRequest handles body correctly.
-    // 2. Implement methods used by POST tests: Poker, TextUpload and UserAuthenticate.
-    // 3. Expand formatting and header methods to handle eventual output from external methods above.
+    /**
+     * Formats a response to a POST request message, and handles the request body content.
+     *
+     * @param request The POST request message to respond to.
+     * @return A Builder object for the response message.
+     */
     private static HTTPResponse.Builder handlePOSTRequest(HTTPRequest request) {
         HTTPResponse.Builder response = formatMessage(request);
         response.body("\r\n\r\n");
@@ -363,45 +372,13 @@ public class HTTPServer {
 
         switch (request.getUrl().toLowerCase()) {
             case ("/uservalidation/"):
-                response.body("Validation results are: \r\n\r\n");
-                // Get validation for all usernames in request body.
-                ValidUserName
-                        .validateSeveralNames(request
-                                .getBody()
-                                .lines()
-                                .skip(1) // The first line of request body is the number of usernames, and we don't care.
-                                .collect(Collectors // method validateSeveralNames needs ArrayList parameter
-                                        .toCollection(ArrayList::new)))
-                        // Append results to response body
-                        .forEach(s -> response.body(s + "\r\n"));
+                POSTUserValidation(response, request);
                 break;
-
             case ("/pokerdistribution/"):
-                //PokerSend poker = new PokerSend();
-                PokerSend poker = new PokerSend();
-                String username = request.getBody().split(" ")[2];
-                String hand = poker.getPlayerhand(username);
-                logger.info("username is: " + username);
-                logger.info("Hand is: " + hand);
-                response.body("Cards are: \r\n\r\n");
-                response.body(hand);
+                POSTPoker(response, request);
                 break;
             case ("/usertextupload/"):
-                String fileName = WEB_ROOT + "/message-" + new Date() + ".txt";
-                try {
-                    File messageFile = new File(fileName);
-                    if (messageFile.createNewFile()){
-                        FileWriter fw = new FileWriter(fileName);
-                        fw.write(request.getBody());
-                        fw.close();
-                    } else {
-                        logger.info("File " + fileName + " somehow already existst... \n" +
-                                "Cannot write.");
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                response.body("File upload succeeded. The path is /lib/\r\n");
+                POSTUserTextUpload(request, response);
                 break;
             default:
 
@@ -411,6 +388,51 @@ public class HTTPServer {
 
         return response;
     }
+
+    private static void POSTUserTextUpload(HTTPRequest request, HTTPResponse.Builder response) {
+        String fileName = WEB_ROOT + "/message-" + new Date() + ".txt";
+        try {
+            File messageFile = new File(fileName);
+            if (messageFile.createNewFile()){
+                FileWriter fw = new FileWriter(fileName);
+                fw.write(request.getBody());
+                fw.close();
+            } else {
+                logger.info("File " + fileName + " somehow already existst... \n" +
+                        "Cannot write.");
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        response.body("File upload succeeded. The path is /lib/\r\n");
+    }
+
+    private static void POSTUserValidation(HTTPResponse.Builder response, HTTPRequest request) {
+        response.body("Validation results are: \r\n\r\n");
+        // Get validation for all usernames in request body.
+        ValidUserName
+                .validateSeveralNames(request
+                        .getBody()
+                        .lines()
+                        .skip(1) // The first line of request body is the number of usernames, and we don't care.
+                        .collect(Collectors // method validateSeveralNames needs ArrayList parameter
+                                .toCollection(ArrayList::new)))
+                // Append results to response body
+                .forEach(s -> response.body(s + "\r\n"));
+    }
+
+    private static void POSTPoker(HTTPResponse.Builder response, HTTPRequest request) {
+        //PokerSend poker = new PokerSend();
+        PokerSend poker = new PokerSend();
+        String username = request.getBody().split(" ")[2];
+        String hand = poker.getPlayerhand(username);
+        logger.info("username is: " + username);
+        logger.info("Hand is: " + hand);
+        response.body("Cards are: \r\n\r\n");
+        response.body(hand);
+    }
+
+
 
     /**
      * Creates an HTTPResponse builder object,
@@ -461,7 +483,7 @@ public class HTTPServer {
      * @param request HTTP request being responded to.
      * @return A Builder object for an HTTP response, with only the status-line content.
      */
-    public static HTTPResponse.Builder createResponseBuilder(HTTPRequest request) {
+    private static HTTPResponse.Builder createResponseBuilder(HTTPRequest request) {
         String statusCode = "";
         String reasonPhrase = "";
 

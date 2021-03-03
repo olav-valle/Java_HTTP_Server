@@ -1,5 +1,3 @@
-# 2021 NTNU - Application Development Course
+# Java HTTP Server
 
-This is the Java code we use for this course
-
-They are organized according to our modules
+A simple HTTP server implemented in Java, as an exercise for the Application Development (IDATA2306) course led by Di Wu, at NTNU Ålesund in spring of 2021.

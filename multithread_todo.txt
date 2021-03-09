@@ -1,0 +1,17 @@
+Required to make HTTPServer multithreaded
+
+refactor HTTP message handling to separate Runnable class?
+make HTTPServer instantiable
+    runServer() = run()
+    implement constructor with socket as param
+
+
+implement Runnable interface
+    override run() method
+
+
+thread creation in main
+    create Socket
+    create HTTPServer object, with Socket
+    create thread
+    start thread

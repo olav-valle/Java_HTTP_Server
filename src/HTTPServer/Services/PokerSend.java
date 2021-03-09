@@ -45,15 +45,9 @@ public class PokerSend {
         cards.put(cardRank, "Red Joker");
         list.add(cardRank);
 
-        // print all the cards
-        System.out.println("All the cards: " + cards);
-        System.out.println("All the numbers: " + list);
-        System.out.println("-----------------------");
         //2. Shuffle the cards
         Collections.shuffle(list);
-        System.out.println("Numbers after shuffle: " + list);
 
-        System.out.println("-----------------------");
         //3. Distribute the cards
         //3.1 Define 4 sets, for 3 players and 1 for left over
         playerA = new ArrayList<>();
@@ -75,17 +69,6 @@ public class PokerSend {
             }
 
         }
-        System.out.println("PlayerA num: " + playerA);
-        System.out.println("PlayerB num: " + playerB);
-        System.out.println("PlayerC num: " + playerC);
-        System.out.println("Leftover: " + leftover);
-
-        System.out.println("-----------------------");
-        // 4. Look at cards
-        System.out.println("Cards of Player A: " + printPoker(playerA, cards));
-        System.out.println("Cards of Player B: " + printPoker(playerB, cards));
-        System.out.println("Cards of Player C: " + printPoker(playerC, cards));
-        System.out.println("Cards of Left Over: " + printPoker(leftover, cards));
 
     }
 
@@ -117,15 +100,16 @@ public class PokerSend {
     }
 
     public static String printPoker(List<Integer> poker_nums, Map<Integer, String> poker_cards) {
+        List<Integer> nums = new ArrayList<>(List.copyOf(poker_nums));
         //1. sort number
-        Collections.sort(poker_nums);
+        Collections.sort(nums);
         //2. iterate list, get all the numbers
         StringBuilder sb = new StringBuilder();
 
-        for (Integer poker_num : poker_nums) {
-            String poker = poker_cards.get(poker_num);
+        for (Integer num : nums) {
+            String poker = poker_cards.get(num);
             //4. concat string
-            sb.append(poker + " ");
+            sb.append(poker).append(" ");
         }
 
         String str = sb.toString();

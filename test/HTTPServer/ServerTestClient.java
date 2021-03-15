@@ -25,7 +25,7 @@ public class ServerTestClient implements Runnable {
         for (int i = 1; i < 10; i++) {
             System.out.println("\n------\nRunning case " + i + "\n------");
             try {
-                Socket s = new Socket(InetAddress.getByName("localhost"), 8080);
+                Socket s = new Socket(InetAddress.getByName("portal.ovalle.no"), 8080);
                 PrintWriter pw = new PrintWriter(s.getOutputStream());
                 BufferedReader br = new BufferedReader(new InputStreamReader(s.getInputStream()));
 

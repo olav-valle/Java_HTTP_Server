@@ -84,7 +84,7 @@ public class HTTPHandler implements Runnable {
     private static HTTPRequest parseRequest(BufferedReader inReader) {
         String method;
         String url;
-        String version;
+        String version = "";
         HTTPRequest request = null;
         HTTPRequest.Builder reqBuilder;
 
@@ -95,9 +95,10 @@ public class HTTPHandler implements Runnable {
             logger.info(method);
             url = requestLine[1];// /path/to/requested.file
             logger.info(url);
-            version = requestLine[2]; // HTTP/x.x
-            logger.info(version);
-
+            if (requestLine.length > 2) {
+                version = requestLine[2]; // HTTP/x.x
+                logger.info(version);
+            }
             // HTTPRequest uses builder pattern
             // Required parameters are method, url and HTTP version of request
             reqBuilder = new HTTPRequest.Builder(method, url, version);

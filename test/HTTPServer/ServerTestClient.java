@@ -10,16 +10,22 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 //// TODO: 02/03/2021 Automate this stuff with some asserts or something...
-public class ServerTestClient {
+public class ServerTestClient implements Runnable {
 
     static String FILE_PATH;
 
-    public static void main(String[] args) throws IOException {
+
+    public ServerTestClient(){
+
+    }
+
+    @Override
+    public void run() {
         FILE_PATH = System.getProperty("user.dir") +  "/test/HTTPServer/testfile.html";
         for (int i = 1; i < 10; i++) {
             System.out.println("\n------\nRunning case " + i + "\n------");
             try {
-                Socket s = new Socket(InetAddress.getByName("localhost"), 8080);
+                Socket s = new Socket(InetAddress.getByName("portal.ovalle.no"), 8080);
                 PrintWriter pw = new PrintWriter(s.getOutputStream());
                 BufferedReader br = new BufferedReader(new InputStreamReader(s.getInputStream()));
 
@@ -82,6 +88,10 @@ public class ServerTestClient {
                 System.out.println("Case " + i + " failed due to exception: \n\t" + e.getMessage() );
             }
         }
+
+    }
+
+    public static void main(String[] args) {
     }
 
     private static void sendRequest(PrintWriter pw, String method, Boolean requestFileFlag, Boolean bodyFlag) {
@@ -185,4 +195,5 @@ public class ServerTestClient {
         }
         pw.flush();
     }
+
 }
